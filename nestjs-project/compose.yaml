@@ -1,12 +1,14 @@
 services:
   nestjs-api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile.dev
     ports:
       - 3000:3000
     volumes:
       - .:/home/node/app
+    env_file:
+      - .env
     depends_on:
       db:
         condition: service_healthy
@@ -18,11 +20,11 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=streamtube
-      - POSTGRES_PASSWORD=streamtube
-      - POSTGRES_DB=streamtube
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U streamtube"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -32,4 +34,3 @@ services:
     ports:
       - "1025:1025"
       - "8025:8025"
-
