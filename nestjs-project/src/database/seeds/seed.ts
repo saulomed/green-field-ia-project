@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import * as dotenv from 'dotenv';
 import { DataSource } from 'typeorm';
+import { buildDatabaseOptions } from '../../config/database.config';
 
 dotenv.config();
 
@@ -9,14 +10,8 @@ const seeders: Array<(dataSource: DataSource) => Promise<void>> = [];
 
 async function runSeeds(): Promise<void> {
   const dataSource = new DataSource({
-    type: 'postgres',
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT),
-    username: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    synchronize: false,
-    entities: ['src/**/*.entity{.js,.ts}'],
+    ...buildDatabaseOptions(process.env),
+    entities: [],
   });
 
   await dataSource.initialize();

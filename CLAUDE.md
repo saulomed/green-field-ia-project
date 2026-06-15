@@ -75,6 +75,17 @@ reviewing, etc.), decompose the request into its underlying subtasks and
 concerns, then identify which available skills match any of them and activate 
 those skills.
 
+### Proactive Skills — NestJS Backend (`nestjs-project/`)
+
+Always load these skills **before** implementing, planning, or reviewing NestJS code:
+
+| Intenção | Skill |
+|----------|-------|
+| Criar/modificar código NestJS (módulos, controllers, services, guards, pipes) | `nestjs-best-practices` |
+| Criar/modificar entidades, migrations, repositórios ou queries TypeORM | `nestjs-best-practices` + `typeorm` |
+| Planejar arquitetura ou features do backend | `nestjs-best-practices` |
+| Escrever ou revisar testes NestJS | `nestjs-best-practices` |
+
 ## Library Documentation Lookup
 
 Before implementing any feature, you MUST use the **context7** MCP tool to look up the relevant library APIs and official documentation.

@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Estabelecer a fundação do monorepo: versionamento Git único, ambiente de desenvolvimento via Docker Compose, gestão de configuração por ambiente e fundação de banco PostgreSQL com TypeORM (migrations e seeds, sem tabelas), além de formalizar a fundação de IA para coding.
+Estabelecer a fundação do monorepo: versionamento Git único, ambiente de desenvolvimento via Docker Compose, gestão de configuração tipada e organizada por domínio (sem leitura direta de `process.env`) e fundação de banco PostgreSQL com TypeORM (migrations e seeds, sem tabelas), além de formalizar a fundação de IA para coding.
 
 ---
 
@@ -52,24 +52,33 @@ Estabelecer a fundação do monorepo: versionamento Git único, ambiente de dese
 
 ---
 
-### IE-01.3 — Gestão de configuração por ambiente (@nestjs/config)
+### IE-01.3 — Gestão de configuração tipada e namespaced (@nestjs/config)
 
-**Descrição:** Centralizar e validar variáveis de ambiente na inicialização da aplicação.
+**Descrição:** Centralizar, validar e organizar as variáveis de ambiente por domínio, expondo acesso tipado e eliminando leituras diretas de `process.env` no código da aplicação. _(Decisões: DT-01 `registerAs`+`ConfigType`, DT-02 namespaces por domínio, DT-03 manter Joi, DT-04 loader compartilhado.)_
 
 **Ações técnicas:**
 
-- Instalar `@nestjs/config@^4.0.0` (compatível com NestJS 11).
-- Registrar `ConfigModule.forRoot({ isGlobal: true })` no `AppModule`, carregando `.env`.
-- Definir validação de schema das variáveis (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `MAIL_HOST`, `MAIL_PORT`) — falhar o boot se ausentes/inválidas.
-- Documentar todas as variáveis em `.env.example` com `DB_HOST=db` (nome do serviço, nunca `localhost`).
+- Criar arquivos de configuração namespaced em `src/config/` com `registerAs` (`@nestjs/config@^4.0.0`): `app.config.ts` (`PORT`, `NODE_ENV`), `database.config.ts` (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`) e `mail.config.ts` (`MAIL_HOST`, `MAIL_PORT`).
+- Extrair uma função pura `buildDatabaseOptions(env)` (reaproveitável fora do DI do Nest) e usá-la como factory do namespace `database` — fonte única das opções de conexão.
+- Manter a validação com Joi em `src/config/env.validation.ts` cobrindo todas as variáveis — incluindo `PORT` e `NODE_ENV` com defaults (`3000`, `development`) — falhando o boot se ausentes/inválidas; documentar `PORT`/`NODE_ENV` em `.env.example`.
+- Registrar `ConfigModule.forRoot({ isGlobal: true, load: [appConfig, databaseConfig, mailConfig], validationSchema })` no `AppModule`.
+- Atualizar `src/main.ts` para obter a porta via `ConfigService` (namespace `app`), eliminando o `process.env.PORT` direto.
+
+**Testes:**
+
+| Arquivo | Camada | Verifica |
+|---------|--------|----------|
+| src/config/env.validation.spec.ts | Unitário | Schema Joi rejeita variável obrigatória ausente/inválida e aplica os defaults de `PORT`/`NODE_ENV` |
+| src/config/database.config.spec.ts | Unitário | `buildDatabaseOptions` monta as opções do Postgres a partir do env (host = nome de serviço, porta numérica) |
 
 **Dependências:** IE-01.2
 
 **Critérios de aceitação:**
 
-- A aplicação falha ao iniciar com erro de validação se uma variável obrigatória estiver ausente.
-- `.env.example` lista todas as variáveis com `DB_HOST=db`.
-- `ConfigService` injeta valores tipados em qualquer módulo.
+- A aplicação falha ao iniciar com erro de validação se uma variável obrigatória (`DB_*`, `MAIL_*`) estiver ausente.
+- Variáveis são acessíveis de forma tipada por namespace (`ConfigType<typeof databaseConfig>`), sem magic strings nem `process.env` no código da aplicação.
+- `PORT` ausente assume o default `3000` e a aplicação sobe nessa porta; `NODE_ENV` ausente assume `development`.
+- `.env.example` lista todas as variáveis com `DB_HOST=db` e `MAIL_HOST=mailpit` (nomes de serviço, nunca `localhost`).
 
 ---
 
@@ -80,8 +89,8 @@ Estabelecer a fundação do monorepo: versionamento Git único, ambiente de dese
 **Ações técnicas:**
 
 - Instalar `@nestjs/typeorm@^11.0.0`, `typeorm@^0.3.0` e `pg@^8.0.0`.
-- Criar `src/database/data-source.ts` exportando um `DataSource` (postgres, host/credenciais via env, `synchronize:false`, `migrationsTableName`, globs de `migrations` e `entities`).
-- Registrar `TypeOrmModule.forRootAsync` com `ConfigService` em um `DatabaseModule` global.
+- Criar `src/database/data-source.ts` exportando um `DataSource` cujas opções vêm de `buildDatabaseOptions(process.env)` (fonte única compartilhada com o namespace `database`), com `synchronize:false`, `migrationsTableName` e globs de `migrations` e `entities`.
+- Registrar `TypeOrmModule.forRootAsync` em um `DatabaseModule` global injetando `databaseConfig` (`ConfigType<typeof databaseConfig>`), sem acesso por string ao `ConfigService`.
 - Adicionar scripts ao `package.json` (`migration:generate`, `migration:run`, `migration:revert`, `migration:show`) via TypeORM CLI apontando para `data-source.ts`.
 - Criar o diretório vazio `src/database/migrations/` (sem entidades/tabelas ainda).
 
@@ -98,7 +107,7 @@ Estabelecer a fundação do monorepo: versionamento Git único, ambiente de dese
 - A aplicação inicia e conecta ao Postgres (`db`) sem entidades registradas.
 - `npm run migration:run` executa sem erro e cria apenas a tabela de controle `typeorm_migrations` (nenhuma migration de domínio).
 - `synchronize` está desativado — nenhuma tabela de domínio é criada automaticamente.
-- O DataSource resolve host e credenciais a partir das variáveis de ambiente.
+- O DataSource resolve host e credenciais via `buildDatabaseOptions` — mesma fonte de opções usada pelo `DatabaseModule`.
 
 ---
 
@@ -108,7 +117,7 @@ Estabelecer a fundação do monorepo: versionamento Git único, ambiente de dese
 
 **Ações técnicas:**
 
-- Criar `src/database/seeds/seed.ts` que inicializa o `DataSource` e executa seeders registrados.
+- Criar `src/database/seeds/seed.ts` que inicializa um `DataSource` a partir de `buildDatabaseOptions(process.env)` (mesma fonte do app/CLI) e executa seeders registrados.
 - Adicionar script `seed` ao `package.json` executando o runner via ts-node.
 - Estabelecer o diretório `src/database/seeds/` com um orquestrador, sem seeders de dados.
 - Documentar como registrar novos seeders em fases futuras.
@@ -118,7 +127,7 @@ Estabelecer a fundação do monorepo: versionamento Git único, ambiente de dese
 **Critérios de aceitação:**
 
 - `npm run seed` executa o runner sem erro e finaliza com código de saída 0 (nenhum dado inserido — sem tabelas).
-- O runner conecta ao mesmo Postgres configurado pelo DataSource.
+- O runner usa a mesma fonte de opções de DB (`buildDatabaseOptions`) que o app e o `data-source.ts`.
 
 ---
 
@@ -164,7 +173,8 @@ IE-01.2 (sem deps)
 
 - [ ] Repositório Git único na raiz, com branches `main` e `dev`, e sem `.git` aninhado em `nestjs-project/`
 - [ ] Ambiente Docker Compose (db/api/mailpit) sobe e o `db` reporta healthy
-- [ ] `@nestjs/config` com validação de variáveis e `.env.example` documentado (`DB_HOST=db`)
+- [ ] `@nestjs/config` com namespaces tipados (`app`/`database`/`mail`), validação Joi (incl. `PORT`/`NODE_ENV` com defaults) e `.env.example` documentado (`DB_HOST=db`, `MAIL_HOST=mailpit`)
+- [ ] Nenhuma leitura direta de `process.env` no código da aplicação — acesso tipado via `ConfigType`; entrypoints CLI (`data-source.ts`, `seed.ts`) usam a função compartilhada `buildDatabaseOptions`
 - [ ] TypeORM configurado (`synchronize:false`), scripts de migration e diretório de migrations vazio
 - [ ] `npm run migration:run` cria apenas `typeorm_migrations` (sem tabelas de domínio)
 - [ ] Seed runner executável (`npm run seed`) sem seeders de dados
