@@ -3,6 +3,7 @@
 > **Fase:** Cadastro, Login e Gerenciamento de Conta (Auth)
 > **Status:** Decidido
 > **Data:** 2026-06-04
+> **Atualizado:** 2026-06-27 — DT-09 a DT-17 adicionadas, formalizando as decisões resolvidas durante o planejamento (`plan-phase`).
 
 ---
 
@@ -120,7 +121,7 @@ As decisões DT-03 e DT-04 dependem de DT-01. DT-06 é independente da estratég
 
 **Recomendação:** Opção A (refresh com rotação no PostgreSQL) — entrega logout real e revogação sem adicionar Redis, aproveitando o banco já previsto; é o padrão recomendado pela RFC 9700 para refresh tokens.
 
-**Decisão:** opção A
+**Decisão:** Opção A — _atualizada em 2026-06-27:_ o **refresh token passa a ser um JWT assinado** (em vez de string opaca), mas continua **rastreado no PostgreSQL pelo seu `jti`** (família, rotação e detecção de reuso preservados — RFC 9700). A persistência permanece obrigatória; muda apenas o formato do valor (opaco → JWT) e o que se persiste (o `jti`, não o hash do valor).
 
 ---
 
@@ -164,7 +165,9 @@ As decisões DT-03 e DT-04 dependem de DT-01. DT-06 é independente da estratég
 
 **Recomendação:** Opção A (token opaco hasheado no banco) — confirmação e reset exigem **uso único e revogação** (após redefinir a senha, links pendentes devem morrer), o que o JWT stateless não garante sozinho. O PostgreSQL já está disponível para isso.
 
-**Decisão:** opção A
+**Decisão:** _atualizada em 2026-06-27 — dividida por fluxo:_
+- **Confirmação de conta → JWT assinado stateless** (claim `purpose: confirm`, sem tabela). O reuso é naturalmente neutralizado pela flag `is_confirmed` (replay → `EMAIL_JA_CONFIRMADO`). _Consequência:_ ao reenviar a confirmação, JWTs de confirmação anteriores permanecem válidos até expirar (não são mais invalidados) — risco baixo, pois todos confirmam a mesma conta.
+- **Reset de senha → Opção A (token opaco hasheado no banco), mantida.** Exige uso único e revogação reais (links pendentes devem morrer após a redefinição), que o JWT stateless não garante.
 
 ---
 
@@ -217,10 +220,253 @@ As decisões DT-03 e DT-04 dependem de DT-01. DT-06 é independente da estratég
 
 ---
 
-## Fora do escopo desta pesquisa (encaminhar para `plan-phase`)
+## Decisões resolvidas durante o planejamento (`plan-phase`)
 
-- **Colisão de nickname do canal:** o canal nasce do prefixo do e-mail (`john@gmail` → `john`), mas prefixos colidem entre domínios. A regra (sufixo numérico, valor aleatório ou bloqueio com escolha manual) é uma decisão de política a definir no planejamento da fase.
-- **Política de senha** (tamanho mínimo, complexidade) e **tempo de expiração** concretos de cada token — valores de implementação para a `plan-phase`.
+> As três pendências antes listadas em "Fora do escopo desta pesquisa" foram resolvidas aqui (DT-10, DT-11, DT-12) junto com a definição dos valores de rate limit (DT-13) e novas decisões surgidas na validação do plano (DT-09, DT-14 a DT-17).
+
+## DT-09: Escopo de frontend da Fase 02
+
+**Contexto:** O `project-plan.md` lista "Telas de cadastro, login, confirmação e recuperação" como capacidade da Fase 02, mas a Fase 01 adiou explicitamente o Next.js e o `nextjs-project/` ainda não existe. As decisões DT-01 a DT-08 são todas de backend.
+
+**Opções:**
+
+### Opção A: Backend-only (telas adiadas)
+- Esta fase entrega apenas a API de autenticação no `nestjs-project/`; as telas vão para uma fase futura de frontend, quando o Next.js for inicializado.
+- **Prós:** escopo coeso; alinha com o adiamento do Next.js feito na Fase 01; não mistura fundação de frontend com auth de backend.
+- **Contras:** o fluxo só fica "visível ao usuário final" numa fase posterior.
+
+### Opção B: Incluir Next.js + telas nesta fase
+- Inicializar o `nextjs-project/` e implementar as 4 telas além da API.
+- **Prós:** entrega o fluxo ponta a ponta numa única fase.
+- **Contras:** dobra o escopo (dois subprojetos); mistura inicialização de frontend com auth.
+
+**Recomendação:** Opção A — mantém o escopo coeso e respeita o adiamento do Next.js da Fase 01.
+
+**Decisão:** **Opção A** — backend-only; telas adiadas. (O link de confirmação/reset nos e-mails apontará para a futura rota do frontend via `APP_BASE_URL`.)
+
+---
+
+## DT-10: Política de colisão de nickname do canal
+
+> Resolve a pendência "Colisão de nickname do canal".
+
+**Contexto:** O canal nasce do prefixo do e-mail, mas prefixos colidem entre domínios (`john@gmail`, `john@hotmail` → `john`). Em todos os casos o prefixo é normalizado (minúsculas, remoção de caracteres fora de `[a-z0-9]`).
+
+**Opções:**
+
+### Opção A: Sufixo numérico incremental
+- `john`, `john1`, `john2`… Determinístico e legível.
+- **Prós:** previsível; handles amigáveis.
+- **Contras:** permite enumeração sequencial de contas.
+
+### Opção B: Sufixo aleatório curto
+- `john-a1b2` — 4 caracteres alfanuméricos aleatórios na colisão.
+- **Prós:** evita enumeração sequencial; resolve a colisão sem interromper o cadastro.
+- **Contras:** handles um pouco menos amigáveis.
+
+### Opção C: Bloquear e exigir escolha manual
+- Cadastro solicita um nickname manual quando o prefixo já existe.
+- **Prós:** usuário controla o handle.
+- **Contras:** adiciona campo/fluxo extra ao cadastro.
+
+**Recomendação:** Opção A — determinística e previsível.
+
+**Decisão:** **Opção B** — sufixo aleatório curto (ex.: `johndoe-a1b2`), evitando enumeração sequencial.
+
+---
+
+## DT-11: Política de senha
+
+> Resolve a pendência "Política de senha".
+
+**Contexto:** O cadastro e a redefinição validam a senha. argon2id (DT-05) não tem o limite de 72 bytes do bcrypt; em todos os casos aplica-se um máximo de 128 caracteres para evitar DoS de hashing.
+
+**Opções:**
+
+### Opção A: Mínimo 8, sem complexidade obrigatória
+- Prioriza comprimento sobre composição (OWASP moderno).
+- **Prós:** menor atrito; recomendação atual do OWASP.
+- **Contras:** aceita senhas comuns se longas o bastante (mitigável com checagem de breach no futuro).
+
+### Opção B: Mínimo 8 + maiúscula, minúscula e número
+- Exige classes de caracteres.
+- **Prós:** força composição mínima.
+- **Contras:** regras de composição têm eficácia questionável e aumentam atrito.
+
+### Opção C: Mínimo 12 + maiúscula, minúscula, número e símbolo
+- Política mais rígida.
+- **Prós:** senhas mais fortes por padrão.
+- **Contras:** maior atrito no cadastro.
+
+**Recomendação:** Opção A — alinhada à recomendação atual do OWASP.
+
+**Decisão:** **Opção A** — mínimo 8, sem complexidade obrigatória, máximo 128 caracteres.
+
+---
+
+## DT-12: TTLs (expirações) dos tokens
+
+> Resolve a pendência "tempo de expiração concretos de cada token".
+
+**Contexto:** Access token (DT-01/04), refresh token (DT-04) e tokens opacos de confirmação/reset (DT-06) precisam de expirações concretas.
+
+**Opções:**
+
+### Opção A: access 15min / refresh 7d / confirm 24h / reset 1h
+- Equilíbrio padrão OWASP entre segurança e UX.
+- **Prós:** access curto com refresh rotacionado; janelas de e-mail usuais.
+- **Contras:** —
+
+### Opção B: access 15min / refresh 30d / confirm 48h / reset 30min
+- Sessão mais longa, confirmação mais folgada, reset mais curto.
+- **Prós:** menos relogins.
+- **Contras:** refresh de 30 dias amplia a janela de um refresh roubado.
+
+### Opção C: access 5min / refresh 24h / confirm 12h / reset 15min
+- Mais conservador.
+- **Prós:** menor janela de exposição.
+- **Contras:** refresh frequente; janelas de e-mail curtas (risco de expirar antes do clique).
+
+**Recomendação:** Opção A — equilíbrio padrão.
+
+**Decisão:** **Opção A** — access 15min, refresh 7d, confirmação 24h, reset 1h.
+
+---
+
+## DT-13: Valores de rate limit (`@nestjs/throttler`)
+
+> Complementa a DT-08, que escolheu o `@nestjs/throttler` mas não fixou valores.
+
+**Contexto:** É preciso definir o limite global e os limites estritos dos endpoints sensíveis (login, solicitação de reset, reenvio de confirmação).
+
+**Opções:**
+
+### Opção A: global 100/min; login 5/min; reset 3/h; reenvio confirmação 3/h
+- **Prós:** protege brute-force de credenciais e abuso de e-mail sem atrapalhar uso legítimo.
+- **Contras:** —
+
+### Opção B: global 60/min; login 5/15min; reset 3/h; reenvio 3/h
+- **Prós:** login mais estrito.
+- **Contras:** pode bloquear retentativas legítimas (5 a cada 15 min).
+
+### Opção C: global 200/min; login 10/min; reset 5/h; reenvio 5/h
+- **Prós:** menor atrito.
+- **Contras:** proteção mais fraca.
+
+**Recomendação:** Opção A — protege os fluxos sensíveis com folga para uso legítimo.
+
+**Decisão:** **Opção A** — global 100/min; login 5/min; forgot-password 3/h; resend-confirmation 3/h.
+
+---
+
+## DT-14: Escopo do logout
+
+> Depende de DT-04 (refresh com rotação por família).
+
+**Contexto:** O logout revoga refresh tokens. É preciso definir se encerra apenas a sessão atual ou todas as sessões do usuário.
+
+**Opções:**
+
+### Opção A: Apenas a sessão/família atual
+- Revoga só a família do refresh em uso (dispositivo atual).
+- **Prós:** comportamento esperado pela maioria dos usuários; não derruba outros dispositivos.
+- **Contras:** não serve como "sair de todos os lugares" (pode vir como recurso futuro).
+
+### Opção B: Todas as sessões do usuário
+- Revoga todos os refresh tokens (logout global).
+- **Prós:** encerra tudo de uma vez.
+- **Contras:** surpreende o usuário ao deslogar outros dispositivos.
+
+**Recomendação:** Opção A — comportamento padrão esperado.
+
+**Decisão:** **Opção A** — logout revoga apenas a família/sessão atual.
+
+---
+
+## DT-15: Proteção CSRF dos cookies
+
+> Depende de DT-03 (tokens em cookie `httpOnly`).
+
+**Contexto:** Com tokens em cookie, é preciso mitigar CSRF. DT-03 já previu `SameSite`; resta definir se basta o `SameSite` ou se haverá token anti-CSRF dedicado.
+
+**Opções:**
+
+### Opção A: Apenas `SameSite=Strict`
+- Cookies `httpOnly` + `Secure` + `SameSite=Strict`.
+- **Prós:** suficiente para esta fase; sem peças extras.
+- **Contras:** sem defesa em profundidade; revisitar se surgirem fluxos cross-site.
+
+### Opção B: `SameSite` + token anti-CSRF (double-submit)
+- Adiciona um token anti-CSRF além do `SameSite`.
+- **Prós:** defesa em profundidade.
+- **Contras:** mais peças (cookie/endpoint de CSRF, validação).
+
+**Recomendação:** Opção A — suficiente nesta fase; token anti-CSRF pode entrar num hardening futuro.
+
+**Decisão:** **Opção A** — `SameSite=Strict` (sem token anti-CSRF dedicado nesta fase).
+
+---
+
+## DT-16: Tratamento de falha no envio de e-mail durante o cadastro
+
+**Contexto:** O cadastro grava usuário + canal no PostgreSQL e então envia o e-mail de confirmação via SMTP — uma operação que cruza um limite externo sem transação distribuída. É preciso definir o comportamento quando o SMTP/Mailpit estiver indisponível após o commit do cadastro.
+
+**Opções:**
+
+### Opção A: Best-effort (conta criada mesmo se o e-mail falhar)
+- O cadastro commita; a falha de e-mail é logada; o usuário fica não confirmado e pode usar o reenvio de confirmação.
+- **Prós:** desacopla a disponibilidade do SMTP da criação de conta; o reenvio cobre a falha.
+- **Contras:** usuário pode não receber o e-mail e precisar acionar o reenvio.
+
+### Opção B: Bloqueante (e-mail obrigatório para concluir o cadastro)
+- O cadastro só é considerado concluído se o e-mail for enviado (falha desfaz/impede a criação).
+- **Prós:** garante que todo cadastro gerou um e-mail.
+- **Contras:** indisponibilidade do SMTP derruba o cadastro inteiro; acopla criação de conta à infraestrutura de e-mail.
+
+**Recomendação:** Opção A — o reenvio de confirmação (já previsto) cobre a falha sem acoplar o cadastro ao SMTP.
+
+**Decisão:** **Opção A** — envio best-effort; cadastro concluído mesmo com falha de e-mail.
+
+---
+
+## DT-17: Revogação de sessões na redefinição de senha
+
+> Depende de DT-04 e DT-06.
+
+**Contexto:** Ao redefinir a senha via token de reset, é preciso decidir o destino das sessões ativas (refresh tokens) do usuário.
+
+**Opções:**
+
+### Opção A: Revogar todas as sessões ativas
+- A redefinição revoga todos os refresh tokens do usuário.
+- **Prós:** postura segura — redefinição costuma indicar comprometimento; expulsa um eventual invasor.
+- **Contras:** o usuário precisa relogar em todos os dispositivos.
+
+### Opção B: Manter as sessões existentes
+- Apenas troca a senha; sessões seguem ativas.
+- **Prós:** menos atrito.
+- **Contras:** um invasor com sessão ativa permanece logado mesmo após a senha mudar.
+
+**Recomendação:** Opção A — encerrar tudo é a postura segura e alinha com o uso único dos tokens (DT-06).
+
+**Decisão:** **Opção A** — a redefinição de senha revoga todas as sessões ativas.
+
+---
+
+## Políticas de comportamento confirmadas no planejamento
+
+Decisões de comportamento sem alternativas relevantes (derivadas das capacidades da fase), registradas para referência da implementação:
+
+- **Login com conta não confirmada** → bloqueado com `403 EMAIL_NAO_CONFIRMADO` (derivado de "confirmação obrigatória" no `project-plan.md`).
+- **Respostas neutras** em `forgot-password` e `resend-confirmation` → sempre `204`, sem revelar a existência/estado da conta.
+- **Endpoint dedicado de reenvio de confirmação** incluído (implícito na DT-08, que prevê rate limit em "reenvio de confirmação").
+- **Nova solicitação invalida pendências anteriores** → emitir um novo token de confirmação/reset invalida os tokens pendentes do mesmo propósito.
+
+---
+
+## Fora do escopo desta pesquisa
+
+- Nenhuma pendência em aberto. As decisões antes encaminhadas para a `plan-phase` (colisão de nickname, política de senha, expiração de tokens) foram resolvidas em DT-10 a DT-12; os valores de rate limit, em DT-13.
 
 ---
 
@@ -231,8 +477,17 @@ As decisões DT-03 e DT-04 dependem de DT-01. DT-06 é independente da estratég
 | DT-01 | Estratégia de autenticação | JWT stateless | **JWT stateless** |
 | DT-02 | Biblioteca de implementação | Passport (`@nestjs/passport` + `@nestjs/jwt`) | **Passport (`@nestjs/passport` + `@nestjs/jwt`)** |
 | DT-03 | Armazenamento do token no cliente | Cookie `httpOnly` | **Cookie `httpOnly`** |
-| DT-04 | Sessão / refresh / logout | Refresh com rotação no PostgreSQL | **Refresh com rotação no PostgreSQL** |
+| DT-04 | Sessão / refresh / logout | Refresh com rotação no PostgreSQL | **Refresh JWT rastreado no PostgreSQL (jti) com rotação** |
 | DT-05 | Hashing de senha | argon2id | **argon2id** |
-| DT-06 | Tokens de confirmação e reset | Token opaco hasheado no banco | **Token opaco hasheado no banco** |
+| DT-06 | Tokens de confirmação e reset | Token opaco hasheado no banco | **Confirmação: JWT stateless · Reset: token opaco hasheado** |
 | DT-07 | Serviço de e-mail | `@nestjs-modules/mailer` + SMTP/Mailpit | **`@nestjs-modules/mailer` + SMTP/Mailpit** |
 | DT-08 | Proteção contra brute-force | `@nestjs/throttler` | **`@nestjs/throttler`** |
+| DT-09 | Escopo de frontend da fase | Backend-only | **Backend-only (telas adiadas)** |
+| DT-10 | Colisão de nickname do canal | Sufixo numérico incremental | **Sufixo aleatório curto** |
+| DT-11 | Política de senha | Mín. 8, sem complexidade | **Mín. 8, sem complexidade, máx. 128** |
+| DT-12 | TTLs dos tokens | access 15min / refresh 7d / confirm 24h / reset 1h | **access 15min / refresh 7d / confirm 24h / reset 1h** |
+| DT-13 | Valores de rate limit | global 100/min; login 5/min; reset 3/h; reenvio 3/h | **global 100/min; login 5/min; forgot 3/h; resend 3/h** |
+| DT-14 | Escopo do logout | Apenas a sessão/família atual | **Apenas a sessão/família atual** |
+| DT-15 | Proteção CSRF | Apenas `SameSite=Strict` | **Apenas `SameSite=Strict`** |
+| DT-16 | Falha de e-mail no cadastro | Best-effort | **Best-effort (conta criada mesmo assim)** |
+| DT-17 | Sessões na redefinição de senha | Revogar todas | **Revogar todas as sessões ativas** |
