@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { TypeOrmModule, getDataSourceToken } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { getDataSourceToken } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { DataSource } from 'typeorm';
+import { databaseConfig } from '../config/database.config';
 import { envValidationSchema } from '../config/env.validation';
+import { DatabaseModule } from './database.module';
 
 describe('DatabaseModule (integration)', () => {
   let module: TestingModule;
@@ -13,23 +15,11 @@ describe('DatabaseModule (integration)', () => {
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
+          load: [databaseConfig],
           validationSchema: envValidationSchema,
           validationOptions: { allowUnknown: true, abortEarly: true },
         }),
-        TypeOrmModule.forRootAsync({
-          imports: [ConfigModule],
-          inject: [ConfigService],
-          useFactory: (config: ConfigService) => ({
-            type: 'postgres',
-            host: config.get<string>('DB_HOST'),
-            port: config.get<number>('DB_PORT'),
-            username: config.get<string>('DB_USER'),
-            password: config.get<string>('DB_PASSWORD'),
-            database: config.get<string>('DB_NAME'),
-            synchronize: false,
-            entities: [],
-          }),
-        }),
+        DatabaseModule,
       ],
     }).compile();
 
