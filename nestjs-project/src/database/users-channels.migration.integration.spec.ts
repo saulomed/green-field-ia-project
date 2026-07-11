@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DataSource, QueryFailedError } from 'typeorm';
 import { databaseConfig } from '../config/database.config';
 import { DatabaseModule } from './database.module';
+import { getTableColumns, hasFkOnUserId } from './migration-test-helpers';
 
 describe('users/channels migration (integration)', () => {
   let module: TestingModule;
@@ -28,21 +29,13 @@ describe('users/channels migration (integration)', () => {
     await module.close();
   });
 
-  async function getTableColumns(table: string): Promise<string[]> {
-    const rows: Array<{ column_name: string }> = await db.query(
-      `SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND table_schema = 'public'`,
-      [table],
-    );
-    return rows.map((r) => r.column_name);
-  }
-
   it('should have the users table with expected columns', async () => {
-    const columns = await getTableColumns('users');
+    const columns = await getTableColumns(db, 'users');
     expect(columns).toEqual(expect.arrayContaining(['id', 'email', 'password_hash', 'is_confirmed', 'created_at', 'updated_at']));
   });
 
   it('should have the channels table with expected columns', async () => {
-    const columns = await getTableColumns('channels');
+    const columns = await getTableColumns(db, 'channels');
     expect(columns).toEqual(expect.arrayContaining(['id', 'user_id', 'nickname', 'name', 'description', 'created_at', 'updated_at']));
   });
 
@@ -88,16 +81,6 @@ describe('users/channels migration (integration)', () => {
   });
 
   it('should have FK constraint from channels.user_id to users.id', async () => {
-    const rows: Array<{ constraint_name: string }> = await db.query(`
-      SELECT tc.constraint_name
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu
-        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-      WHERE tc.constraint_type = 'FOREIGN KEY'
-        AND tc.table_name = 'channels'
-        AND kcu.column_name = 'user_id'
-        AND tc.table_schema = 'public'
-    `);
-    expect(rows.length).toBeGreaterThan(0);
+    expect(await hasFkOnUserId(db, 'channels')).toBe(true);
   });
 });

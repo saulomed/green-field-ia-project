@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DataSource, QueryFailedError } from 'typeorm';
 import { databaseConfig } from '../config/database.config';
 import { DatabaseModule } from './database.module';
+import { getTableColumns, hasFkOnUserId } from './migration-test-helpers';
 
 describe('auth-tokens migration (integration)', () => {
   let module: TestingModule;
@@ -37,14 +38,6 @@ describe('auth-tokens migration (integration)', () => {
     await module.close();
   });
 
-  async function getTableColumns(table: string): Promise<string[]> {
-    const rows: Array<{ column_name: string }> = await db.query(
-      `SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND table_schema = 'public'`,
-      [table],
-    );
-    return rows.map((r) => r.column_name);
-  }
-
   async function createUser(id: string, email: string): Promise<void> {
     await db.query(
       `INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`,
@@ -53,14 +46,14 @@ describe('auth-tokens migration (integration)', () => {
   }
 
   it('should have the refresh_tokens table with expected columns', async () => {
-    const columns = await getTableColumns('refresh_tokens');
+    const columns = await getTableColumns(db, 'refresh_tokens');
     expect(columns).toEqual(
       expect.arrayContaining(['id', 'user_id', 'jti', 'family_id', 'expires_at', 'revoked_at', 'replaced_by_id', 'created_at']),
     );
   });
 
   it('should have the password_reset_tokens table with expected columns', async () => {
-    const columns = await getTableColumns('password_reset_tokens');
+    const columns = await getTableColumns(db, 'password_reset_tokens');
     expect(columns).toEqual(
       expect.arrayContaining(['id', 'user_id', 'token_hash', 'expires_at', 'used_at', 'created_at']),
     );
@@ -130,25 +123,11 @@ describe('auth-tokens migration (integration)', () => {
     expect(remaining).toHaveLength(0);
   });
 
-  async function hasFkConstraint(table: string): Promise<boolean> {
-    const rows: Array<{ constraint_name: string }> = await db.query(`
-      SELECT tc.constraint_name
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu
-        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-      WHERE tc.constraint_type = 'FOREIGN KEY'
-        AND tc.table_name = $1
-        AND kcu.column_name = 'user_id'
-        AND tc.table_schema = 'public'
-    `, [table]);
-    return rows.length > 0;
-  }
-
   it('should have FK constraint from refresh_tokens.user_id to users.id', async () => {
-    expect(await hasFkConstraint('refresh_tokens')).toBe(true);
+    expect(await hasFkOnUserId(db, 'refresh_tokens')).toBe(true);
   });
 
   it('should have FK constraint from password_reset_tokens.user_id to users.id', async () => {
-    expect(await hasFkConstraint('password_reset_tokens')).toBe(true);
+    expect(await hasFkOnUserId(db, 'password_reset_tokens')).toBe(true);
   });
 });

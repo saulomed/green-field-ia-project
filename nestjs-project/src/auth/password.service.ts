@@ -19,13 +19,7 @@ export class PasswordService {
     if (!argon2Cfg) {
       throw new Error('auth.argon2 config block is missing — ensure AuthModule imports authConfig');
     }
-    const { memoryCost, timeCost, parallelism } = argon2Cfg;
-    this.argon2Options = {
-      type: argon2.argon2id,
-      memoryCost,
-      timeCost,
-      parallelism,
-    };
+    this.argon2Options = { type: argon2.argon2id, ...argon2Cfg };
   }
 
   /**
