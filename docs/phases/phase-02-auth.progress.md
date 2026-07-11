@@ -1,7 +1,7 @@
 # Phase 02 — Cadastro, Login e Gerenciamento de Conta — Progress
 
 **Status:** in_progress
-**SIs:** 4/16 completed
+**SIs:** 5/16 completed
 
 ### SI-02.1 — Fundação HTTP: validação, cookies e formato de erro
 - **Status:** completed
@@ -24,9 +24,9 @@
 - **Observations:** @JoinColumn({ name: 'user_id' }) necessário no @ManyToOne para evitar coluna duplicada userId/user_id na migration gerada; beforeAll de cleanup necessário para idempotência dos testes de integração
 
 ### SI-02.5 — PasswordService (hashing argon2id)
-- **Status:** pending
-- **Tests:** pending
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 5 testes unitários em password.service.spec.ts (digest argon2id, salt aleatório, verify true/false/invalid) — todos passando
+- **Observations:** argon2 instalado com -u root devido a permissões em node_modules/@emnapi; try/catch em verify garante retorno false sem throw para digests inválidos
 
 ### SI-02.6 — PasswordResetTokenService (tokens opacos de reset)
 - **Status:** pending
