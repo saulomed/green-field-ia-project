@@ -29,9 +29,9 @@
 - **Observations:** argon2 instalado com -u root devido a permissões em node_modules/@emnapi; try/catch em verify garante retorno false sem throw para digests inválidos
 
 ### SI-02.6 — PasswordResetTokenService (tokens opacos de reset)
-- **Status:** pending
-- **Tests:** pending
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 9 testes unitários em password-reset-token.service.spec.ts (issue persiste hash; consume aceita token válido e rejeita expirado/usado/ausente; invalidateAll derruba pendentes) — todos passando
+- **Observations:** DomainException base criada em src/common/exceptions/domain.exception.ts; HttpExceptionFilter atualizado para mapear DomainException ao formato padrão (code → error, statusCode)
 
 ### SI-02.7 — MailModule e templates transacionais
 - **Status:** pending
