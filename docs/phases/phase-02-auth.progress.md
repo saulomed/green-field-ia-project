@@ -1,7 +1,7 @@
 # Phase 02 — Cadastro, Login e Gerenciamento de Conta — Progress
 
 **Status:** in_progress
-**SIs:** 5/16 completed
+**SIs:** 7/16 completed
 
 ### SI-02.1 — Fundação HTTP: validação, cookies e formato de erro
 - **Status:** completed
@@ -34,9 +34,9 @@
 - **Observations:** DomainException base criada em src/common/exceptions/domain.exception.ts; HttpExceptionFilter atualizado para mapear DomainException ao formato padrão (code → error, statusCode)
 
 ### SI-02.7 — MailModule e templates transacionais
-- **Status:** pending
-- **Tests:** pending
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 4 testes unitários em mail.service.spec.ts (sendConfirmation/sendPasswordReset chamam MailerService.sendMail com template, to e context corretos) — todos passando
+- **Observations:** @nestjs-modules/mailer@2.1.19 usado (em vez de 2.x latest) pois 2.3.x exige nodemailer>=8 mas o projeto usa nodemailer@6.x; nest-cli.json atualizado com assets hbs para cópia na build
 
 ### SI-02.8 — ChannelService (derivação de nickname a partir do e-mail)
 - **Status:** pending
