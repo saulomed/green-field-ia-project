@@ -1,7 +1,7 @@
 # Phase 02 — Cadastro, Login e Gerenciamento de Conta — Progress
 
 **Status:** in_progress
-**SIs:** 3/16 completed
+**SIs:** 4/16 completed
 
 ### SI-02.1 — Fundação HTTP: validação, cookies e formato de erro
 - **Status:** completed
@@ -19,9 +19,9 @@
 - **Observations:** permissão do diretório de migrations ajustada no container (chmod 777) para geração via CLI
 
 ### SI-02.4 — Entidades RefreshToken e PasswordResetToken + migration
-- **Status:** pending
-- **Tests:** pending
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 7 testes de integração em auth-tokens.migration.integration.spec.ts (colunas, jti único, FK cascade para refresh_tokens e password_reset_tokens) — todos passando
+- **Observations:** @JoinColumn({ name: 'user_id' }) necessário no @ManyToOne para evitar coluna duplicada userId/user_id na migration gerada; beforeAll de cleanup necessário para idempotência dos testes de integração
 
 ### SI-02.5 — PasswordService (hashing argon2id)
 - **Status:** pending
