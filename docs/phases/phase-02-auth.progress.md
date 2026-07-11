@@ -1,7 +1,7 @@
 # Phase 02 — Cadastro, Login e Gerenciamento de Conta — Progress
 
 **Status:** in_progress
-**SIs:** 2/16 completed
+**SIs:** 3/16 completed
 
 ### SI-02.1 — Fundação HTTP: validação, cookies e formato de erro
 - **Status:** completed
@@ -14,9 +14,9 @@
 - **Observations:** database.integration.spec.ts removido da dependência do schema Joi completo (desacoplamento correto — o teste é de DatabaseModule, não de validação de env)
 
 ### SI-02.3 — Entidades User e Channel + migration
-- **Status:** pending
-- **Tests:** pending
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 6 testes de integração em users-channels.migration.integration.spec.ts (colunas, unicidade email/nickname, FK cascade) — 38 total passando
+- **Observations:** permissão do diretório de migrations ajustada no container (chmod 777) para geração via CLI
 
 ### SI-02.4 — Entidades RefreshToken e PasswordResetToken + migration
 - **Status:** pending

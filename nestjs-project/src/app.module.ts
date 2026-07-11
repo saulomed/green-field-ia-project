@@ -8,6 +8,8 @@ import { databaseConfig } from './config/database.config';
 import { mailConfig } from './config/mail.config';
 import { envValidationSchema } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
+import { UsersModule } from './users/users.module';
+import { ChannelsModule } from './channels/channels.module';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { DatabaseModule } from './database/database.module';
       },
     }),
     DatabaseModule,
+    UsersModule,
+    ChannelsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
