@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
 import { AuthConfig } from '../config/auth.config';
 import { UsersModule } from '../users/users.module';
 import { ChannelsModule } from '../channels/channels.module';
@@ -8,6 +9,8 @@ import { MailModule } from '../mail/mail.module';
 import { PasswordService } from './password.service';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { LocalStrategy } from './strategies/local.strategy';
+import { JwtStrategy } from './strategies/jwt.strategy';
 
 /**
  * Authentication domain module: registration, confirmation, login and
@@ -18,6 +21,7 @@ import { AuthController } from './auth.controller';
  */
 @Module({
   imports: [
+    PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
@@ -33,7 +37,7 @@ import { AuthController } from './auth.controller';
     MailModule,
   ],
   controllers: [AuthController],
-  providers: [PasswordService, AuthService],
+  providers: [PasswordService, AuthService, LocalStrategy, JwtStrategy],
   exports: [AuthService],
 })
 export class AuthModule {}

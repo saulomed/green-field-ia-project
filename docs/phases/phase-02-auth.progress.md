@@ -1,7 +1,7 @@
 # Phase 02 — Cadastro, Login e Gerenciamento de Conta — Progress
 
 **Status:** in_progress
-**SIs:** 10/16 completed
+**SIs:** 11/16 completed
 
 ### SI-02.1 — Fundação HTTP: validação, cookies e formato de erro
 - **Status:** completed
@@ -54,9 +54,9 @@
 - **Observations:** EmailAlreadyConfirmedException criada reaproveitando o padrão DomainException; InvalidTokenException (já existente desde SI-02.6) reaproveitada tanto para JWT inválido/expirado quanto para purpose incorreto. Extraído test/support/mailpit.ts com helpers de polling (awaitMessageTo, awaitMessageCountTo) compartilhados entre auth-register.e2e-spec.ts e auth-confirm.e2e-spec.ts, evitando duplicação agora que duas specs precisam consultar o Mailpit.
 
 ### SI-02.11 — Infraestrutura Passport/JWT (strategies e guards)
-- **Status:** pending
-- **Tests:** pending
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 5 testes unitários em jwt.strategy.spec.ts (cookieExtractor lê o token do cookie access_token; retorna null sem cookie/sem access_token; validate retorna o payload como está) + 2 testes unitários em local.strategy.spec.ts (validate retorna o usuário em credenciais válidas; lança UnauthorizedException em credenciais inválidas) — todos passando
+- **Observations:** Instalados @nestjs/passport, passport, passport-local, passport-jwt (+ @types/passport-local, @types/passport-jwt). PassportModule registrado em AuthModule; JwtModule.registerAsync já existia desde SI-02.9. Adicionado AuthService.validateCredentials (busca usuário por e-mail + PasswordService.verify) para o LocalStrategy reaproveitar. JwtStrategy extrai o access token do cookie `access_token` via extractor customizado (não há suporte nativo a cookie no passport-jwt) e apenas repassa o payload decodificado — a resolução do usuário completo fica para quando SI-02.13/02.14 precisarem dele. A instalação de @types/passport-jwt trouxe uma versão mais nova de @types/jsonwebtoken cujo `expiresIn` mudou de `string` para `StringValue` (do pacote `ms`); corrigido tipando apenas `jwtAccessTtl` e `confirmTokenTtl` como `StringValue` em `auth.config.ts` — os únicos dois campos realmente consumidos por `JwtService.signAsync`/`registerAsync` — mantendo `jwtRefreshTtl` (ainda não usado) e `resetTokenTtl` (consumido por `parseTtlToMs`, que espera `string` puro) com o tipo original. Extraída constante `AUTH_COOKIES.ACCESS_TOKEN` em `auth.constants.ts` para o nome do cookie, reaproveitada pelo `cookieExtractor`, evitando o literal `'access_token'` solto. Avaliada e descartada a sugestão de unificar `AccessTokenPayload` (JwtStrategy) com `ConfirmTokenPayload` (AuthService) num tipo compartilhado — o formato real do access token só será definido quando SI-02.12 implementar `SessionService.issuePair`, seguindo o mesmo princípio já aplicado em SI-02.10 de não desenhar para requisitos futuros ainda não concretizados.
 
 ### SI-02.12 — SessionService (refresh com rotação e detecção de reuso)
 - **Status:** pending

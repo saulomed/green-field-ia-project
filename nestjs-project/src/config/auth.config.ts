@@ -1,4 +1,5 @@
 import { registerAs, ConfigType } from '@nestjs/config';
+import type { StringValue } from 'ms';
 
 /**
  * Authentication configuration namespace.
@@ -9,9 +10,9 @@ import { registerAs, ConfigType } from '@nestjs/config';
  */
 export const authConfig = registerAs('auth', () => ({
   jwtSecret: process.env.JWT_SECRET as string,
-  jwtAccessTtl: process.env.JWT_ACCESS_TTL as string,
+  jwtAccessTtl: process.env.JWT_ACCESS_TTL as StringValue,
   jwtRefreshTtl: process.env.JWT_REFRESH_TTL as string,
-  confirmTokenTtl: process.env.CONFIRM_TOKEN_TTL as string,
+  confirmTokenTtl: process.env.CONFIRM_TOKEN_TTL as StringValue,
   resetTokenTtl: process.env.RESET_TOKEN_TTL as string,
   argon2: {
     memoryCost: 65536,

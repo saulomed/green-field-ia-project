@@ -135,6 +135,27 @@ export class AuthService {
     }
   }
 
+  /**
+   * Verifies e-mail/password credentials for the local login strategy.
+   *
+   * @returns The matching user, or `null` if the e-mail is unknown or the password is wrong
+   */
+  async validateCredentials(
+    email: string,
+    password: string,
+  ): Promise<User | null> {
+    const user = await this.dataSource.manager.findOneBy(User, { email });
+    if (!user) {
+      return null;
+    }
+
+    const valid = await this.passwordService.verify(
+      user.passwordHash,
+      password,
+    );
+    return valid ? user : null;
+  }
+
   private async verifyConfirmToken(
     token: string,
   ): Promise<ConfirmTokenPayload> {
