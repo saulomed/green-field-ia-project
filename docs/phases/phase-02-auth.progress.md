@@ -1,7 +1,7 @@
 # Phase 02 — Cadastro, Login e Gerenciamento de Conta — Progress
 
 **Status:** in_progress
-**SIs:** 9/16 completed
+**SIs:** 10/16 completed
 
 ### SI-02.1 — Fundação HTTP: validação, cookies e formato de erro
 - **Status:** completed
@@ -49,9 +49,9 @@
 - **Observations:** IE-02.9 depende de IE-02.11 (JwtService) apesar da ordem sugerida no documento listar 02.9 antes de 02.11 — antecipado apenas o registro do JwtModule (JwtModule.registerAsync) em AuthModule; strategies/guards completos ficam para SI-02.11. Corrigidos três gaps pré-existentes descobertos ao rodar o primeiro teste que carrega o AppModule completo: (1) MailModule importava HandlebarsAdapter via caminho `dist/...` que viola o `exports` map do pacote `@nestjs-modules/mailer`, quebrando qualquer teste que importe AppModule; (2) `.env` não tinha JWT_SECRET, exigido pelo schema Joi desde SI-02.2; (3) `buildDatabaseOptions` apontava `entities` para `dist/**/*.entity.js`, inexistente fora de um build de produção — trocado por glob relativo a `__dirname` que funciona tanto em ts-jest/ts-node quanto em dist compilado.
 
 ### SI-02.10 — Confirmação de conta e reenvio
-- **Status:** pending
-- **Tests:** pending
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 7 testes unitários em auth.service.spec.ts (confirmAccount: ativa conta pendente com token válido; rejeita JWT expirado/inválido; rejeita purpose diferente de "confirm"; rejeita conta já confirmada — resendConfirmation: reenvia e-mail com novo JWT para conta pendente; não reenvia para conta já confirmada; resolve neutro sem lançar quando e-mail não existe) + 5 testes E2E em auth-confirm.e2e-spec.ts (204 e isConfirmed=true com token válido; 400 TOKEN_INVALIDO para JWT inválido; 409 EMAIL_JA_CONFIRMADO em replay; 204 neutro com reenvio efetivo para conta pendente; 204 neutro para e-mail inexistente) — todos passando
+- **Observations:** EmailAlreadyConfirmedException criada reaproveitando o padrão DomainException; InvalidTokenException (já existente desde SI-02.6) reaproveitada tanto para JWT inválido/expirado quanto para purpose incorreto. Extraído test/support/mailpit.ts com helpers de polling (awaitMessageTo, awaitMessageCountTo) compartilhados entre auth-register.e2e-spec.ts e auth-confirm.e2e-spec.ts, evitando duplicação agora que duas specs precisam consultar o Mailpit.
 
 ### SI-02.11 — Infraestrutura Passport/JWT (strategies e guards)
 - **Status:** pending

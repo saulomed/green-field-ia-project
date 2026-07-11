@@ -10,37 +10,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
-
-const MAILPIT_API = 'http://mailpit:8025/api/v1';
-
-async function findMessageTo(
-  email: string,
-): Promise<{ Subject: string; Text: string } | undefined> {
-  const res = await fetch(
-    `${MAILPIT_API}/search?query=to:${encodeURIComponent(email)}`,
-  );
-  const { messages } = (await res.json()) as {
-    messages: Array<{ ID: string }>;
-  };
-  if (messages.length === 0) return undefined;
-
-  const detail = await fetch(`${MAILPIT_API}/message/${messages[0].ID}`);
-  return (await detail.json()) as { Subject: string; Text: string };
-}
-
-async function awaitMessageTo(
-  email: string,
-  timeoutMs = 2000,
-  pollIntervalMs = 50,
-): Promise<{ Subject: string; Text: string } | undefined> {
-  const deadline = Date.now() + timeoutMs;
-  do {
-    const message = await findMessageTo(email);
-    if (message) return message;
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-  } while (Date.now() < deadline);
-  return undefined;
-}
+import { awaitMessageTo } from './support/mailpit';
 
 describe('Auth — POST /auth/register (e2e)', () => {
   let app: INestApplication<App>;

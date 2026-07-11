@@ -10,7 +10,17 @@ import { MailService } from '../mail/mail.service';
 import { AuthConfig } from '../config/auth.config';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
+import { ConfirmDto } from './dto/confirm.dto';
+import { ResendConfirmationDto } from './dto/resend-confirmation.dto';
 import { EmailAlreadyExistsException } from '../common/exceptions/email-already-exists.exception';
+import { EmailAlreadyConfirmedException } from '../common/exceptions/email-already-confirmed.exception';
+import { InvalidTokenException } from '../common/exceptions/invalid-token.exception';
+import { JWT_PURPOSE } from './auth.constants';
+
+interface ConfirmTokenPayload {
+  sub: string;
+  purpose: string;
+}
 
 /**
  * Handles account registration: atomic user + channel creation, plus
@@ -83,13 +93,71 @@ export class AuthService {
     };
   }
 
+  /**
+   * Activates the account identified by a confirmation JWT.
+   *
+   * @throws InvalidTokenException if the token is absent, expired, or not a confirm token
+   * @throws EmailAlreadyConfirmedException if the account is already confirmed (also covers token replay)
+   */
+  async confirmAccount(dto: ConfirmDto): Promise<void> {
+    const payload = await this.verifyConfirmToken(dto.token);
+
+    const user = await this.dataSource.manager.findOneBy(User, {
+      id: payload.sub,
+    });
+    if (!user) {
+      throw new InvalidTokenException();
+    }
+    if (user.isConfirmed) {
+      throw new EmailAlreadyConfirmedException();
+    }
+
+    await this.dataSource.manager.update(User, user.id, {
+      isConfirmed: true,
+    });
+  }
+
+  /**
+   * Re-sends the confirmation e-mail for a pending account. Always resolves
+   * without revealing whether the e-mail belongs to an account or its
+   * confirmation state — the caller receives a neutral response either way.
+   * Previously issued confirmation JWTs remain valid until they expire.
+   */
+  async resendConfirmation(dto: ResendConfirmationDto): Promise<void> {
+    const user = await this.dataSource.manager.findOne(User, {
+      where: { email: dto.email },
+      relations: { channel: true },
+      select: { channel: { name: true } },
+    });
+
+    if (user && !user.isConfirmed) {
+      await this.sendConfirmationEmail(user, user.channel.name);
+    }
+  }
+
+  private async verifyConfirmToken(
+    token: string,
+  ): Promise<ConfirmTokenPayload> {
+    let payload: ConfirmTokenPayload;
+    try {
+      payload = await this.jwtService.verifyAsync<ConfirmTokenPayload>(token);
+    } catch {
+      throw new InvalidTokenException();
+    }
+
+    if (payload.purpose !== JWT_PURPOSE.CONFIRM) {
+      throw new InvalidTokenException();
+    }
+    return payload;
+  }
+
   private async sendConfirmationEmail(user: User, name: string): Promise<void> {
     try {
       const confirmTokenTtl = this.configService.get<
         AuthConfig['confirmTokenTtl']
       >('auth.confirmTokenTtl');
       const token = await this.jwtService.signAsync(
-        { sub: user.id, purpose: 'confirm' },
+        { sub: user.id, purpose: JWT_PURPOSE.CONFIRM },
         { expiresIn: confirmTokenTtl },
       );
       await this.mailService.sendConfirmation(user.email, name, token);
