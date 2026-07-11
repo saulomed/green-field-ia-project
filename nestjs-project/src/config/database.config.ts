@@ -1,5 +1,6 @@
 import { registerAs, ConfigType } from '@nestjs/config';
 import { DataSourceOptions } from 'typeorm';
+import { join } from 'path';
 
 /**
  * Builds PostgreSQL connection options from an environment variable map.
@@ -13,7 +14,9 @@ import { DataSourceOptions } from 'typeorm';
  * @param env - environment variable map (process.env or a test stub)
  * @returns DataSourceOptions ready for TypeORM
  */
-export function buildDatabaseOptions(env: NodeJS.ProcessEnv): DataSourceOptions {
+export function buildDatabaseOptions(
+  env: NodeJS.ProcessEnv,
+): DataSourceOptions {
   return {
     type: 'postgres',
     host: env.DB_HOST,
@@ -25,7 +28,7 @@ export function buildDatabaseOptions(env: NodeJS.ProcessEnv): DataSourceOptions 
     logging: false,
     migrationsTableName: 'typeorm_migrations',
     migrations: ['dist/database/migrations/**/*.js'],
-    entities: ['dist/**/*.entity.js'],
+    entities: [join(__dirname, '..', '**', '*.entity{.ts,.js}')],
   };
 }
 

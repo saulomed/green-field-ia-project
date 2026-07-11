@@ -1,7 +1,7 @@
 # Phase 02 — Cadastro, Login e Gerenciamento de Conta — Progress
 
 **Status:** in_progress
-**SIs:** 7/16 completed
+**SIs:** 9/16 completed
 
 ### SI-02.1 — Fundação HTTP: validação, cookies e formato de erro
 - **Status:** completed
@@ -40,13 +40,13 @@
 
 ### SI-02.8 — ChannelService (derivação de nickname a partir do e-mail)
 - **Status:** completed
-- **Tests:** 9 testes unitários em channel.service.spec.ts (normalizePrefix para vários formatos de e-mail; createForUser cria canal sem colisão, com sufixo aleatório em colisão, com retentativas; name = prefixo normalizado; description = null) — todos passando
+- **Tests:** 7 testes unitários em channel.service.spec.ts (normalizePrefix para vários formatos de e-mail; createForUser cria canal sem colisão, com sufixo aleatório em colisão, com retentativas) — todos passando
 - **Observations:** none
 
 ### SI-02.9 — Cadastro de usuário (POST /auth/register)
-- **Status:** pending
-- **Tests:** pending
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 6 testes unitários em auth.service.spec.ts (senha hasheada antes de persistir; e-mail duplicado rejeitado com EmailAlreadyExistsException; falha na criação do canal propaga e reverte a transação; retorno com id/email/nickname; e-mail de confirmação enviado com JWT assinado; falha no envio de e-mail não derruba o cadastro) + 4 testes E2E em auth-register.e2e-spec.ts (201 com canal criado; 409 e-mail duplicado; 400 validação de senha curta; e-mail de confirmação capturado no Mailpit) — todos passando
+- **Observations:** IE-02.9 depende de IE-02.11 (JwtService) apesar da ordem sugerida no documento listar 02.9 antes de 02.11 — antecipado apenas o registro do JwtModule (JwtModule.registerAsync) em AuthModule; strategies/guards completos ficam para SI-02.11. Corrigidos três gaps pré-existentes descobertos ao rodar o primeiro teste que carrega o AppModule completo: (1) MailModule importava HandlebarsAdapter via caminho `dist/...` que viola o `exports` map do pacote `@nestjs-modules/mailer`, quebrando qualquer teste que importe AppModule; (2) `.env` não tinha JWT_SECRET, exigido pelo schema Joi desde SI-02.2; (3) `buildDatabaseOptions` apontava `entities` para `dist/**/*.entity.js`, inexistente fora de um build de produção — trocado por glob relativo a `__dirname` que funciona tanto em ts-jest/ts-node quanto em dist compilado.
 
 ### SI-02.10 — Confirmação de conta e reenvio
 - **Status:** pending

@@ -11,6 +11,7 @@ import { DatabaseModule } from './database/database.module';
 import { MailModule } from './mail/mail.module';
 import { UsersModule } from './users/users.module';
 import { ChannelsModule } from './channels/channels.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ChannelsModule } from './channels/channels.module';
     MailModule,
     UsersModule,
     ChannelsModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

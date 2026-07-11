@@ -1,0 +1,39 @@
+import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { AuthConfig } from '../config/auth.config';
+import { UsersModule } from '../users/users.module';
+import { ChannelsModule } from '../channels/channels.module';
+import { MailModule } from '../mail/mail.module';
+import { PasswordService } from './password.service';
+import { AuthService } from './auth.service';
+import { AuthController } from './auth.controller';
+
+/**
+ * Authentication domain module: registration, confirmation, login and
+ * session management (built incrementally across SI-02.9–02.15).
+ *
+ * @author Saulo Santos
+ * @date 11/07/2026
+ */
+@Module({
+  imports: [
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const auth = config.get<AuthConfig>('auth')!;
+        return {
+          secret: auth.jwtSecret,
+          signOptions: { expiresIn: auth.jwtAccessTtl },
+        };
+      },
+    }),
+    UsersModule,
+    ChannelsModule,
+    MailModule,
+  ],
+  controllers: [AuthController],
+  providers: [PasswordService, AuthService],
+  exports: [AuthService],
+})
+export class AuthModule {}
