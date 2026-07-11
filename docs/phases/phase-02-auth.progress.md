@@ -1,7 +1,7 @@
 # Phase 02 — Cadastro, Login e Gerenciamento de Conta — Progress
 
 **Status:** in_progress
-**SIs:** 1/16 completed
+**SIs:** 2/16 completed
 
 ### SI-02.1 — Fundação HTTP: validação, cookies e formato de erro
 - **Status:** completed
@@ -9,9 +9,9 @@
 - **Observations:** none
 
 ### SI-02.2 — Configuração de autenticação e e-mail (namespaces tipados)
-- **Status:** pending
-- **Tests:** pending
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 8 novos testes em env.validation.spec.ts (JWT_SECRET obrigatório, TTL defaults, cookie defaults) — 32 total passando
+- **Observations:** database.integration.spec.ts removido da dependência do schema Joi completo (desacoplamento correto — o teste é de DatabaseModule, não de validação de env)
 
 ### SI-02.3 — Entidades User e Channel + migration
 - **Status:** pending

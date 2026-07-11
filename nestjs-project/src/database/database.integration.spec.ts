@@ -3,7 +3,6 @@ import { getDataSourceToken } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { databaseConfig } from '../config/database.config';
-import { envValidationSchema } from '../config/env.validation';
 import { DatabaseModule } from './database.module';
 
 describe('DatabaseModule (integration)', () => {
@@ -16,7 +15,6 @@ describe('DatabaseModule (integration)', () => {
         ConfigModule.forRoot({
           isGlobal: true,
           load: [databaseConfig],
-          validationSchema: envValidationSchema,
           validationOptions: { allowUnknown: true, abortEarly: true },
         }),
         DatabaseModule,
