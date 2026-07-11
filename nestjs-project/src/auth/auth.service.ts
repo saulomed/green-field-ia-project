@@ -3,18 +3,22 @@ import { ConfigService } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
+import { Response } from 'express';
 import { User } from '../users/entities/user.entity';
 import { ChannelService } from '../channels/channel.service';
 import { PasswordService } from './password.service';
+import { SessionService } from './session.service';
 import { MailService } from '../mail/mail.service';
 import { AuthConfig } from '../config/auth.config';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
+import { LoginResponseDto } from './dto/login-response.dto';
 import { ConfirmDto } from './dto/confirm.dto';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto';
 import { EmailAlreadyExistsException } from '../common/exceptions/email-already-exists.exception';
 import { EmailAlreadyConfirmedException } from '../common/exceptions/email-already-confirmed.exception';
 import { InvalidTokenException } from '../common/exceptions/invalid-token.exception';
+import { EmailNotConfirmedException } from '../common/exceptions/email-not-confirmed.exception';
 import { JWT_PURPOSE } from './auth.constants';
 
 interface ConfirmTokenPayload {
@@ -37,6 +41,7 @@ export class AuthService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly passwordService: PasswordService,
     private readonly channelService: ChannelService,
+    private readonly sessionService: SessionService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
@@ -137,6 +142,8 @@ export class AuthService {
 
   /**
    * Verifies e-mail/password credentials for the local login strategy.
+   * Loads the user's channel alongside it, since a successful login needs
+   * the nickname for its response.
    *
    * @returns The matching user, or `null` if the e-mail is unknown or the password is wrong
    */
@@ -144,7 +151,10 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<User | null> {
-    const user = await this.dataSource.manager.findOneBy(User, { email });
+    const user = await this.dataSource.manager.findOne(User, {
+      where: { email },
+      relations: { channel: true },
+    });
     if (!user) {
       return null;
     }
@@ -154,6 +164,28 @@ export class AuthService {
       password,
     );
     return valid ? user : null;
+  }
+
+  /**
+   * Issues a session for a user already authenticated by LocalAuthGuard.
+   *
+   * @param user - The credential-validated user, with its channel loaded
+   * @param res - Response the session cookies are attached to
+   * @throws EmailNotConfirmedException if the account's e-mail is not confirmed
+   */
+  async login(user: User, res: Response): Promise<LoginResponseDto> {
+    if (!user.isConfirmed) {
+      throw new EmailNotConfirmedException();
+    }
+
+    const pair = await this.sessionService.issuePair(user);
+    this.sessionService.setAuthCookies(res, pair);
+
+    return {
+      id: user.id,
+      email: user.email,
+      channel: { nickname: user.channel.nickname },
+    };
   }
 
   private async verifyConfirmToken(

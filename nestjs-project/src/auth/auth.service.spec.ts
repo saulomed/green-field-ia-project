@@ -3,9 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource, EntityManager } from 'typeorm';
+import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { PasswordService } from './password.service';
 import { ChannelService } from '../channels/channel.service';
+import { SessionService, TokenPair } from './session.service';
 import { MailService } from '../mail/mail.service';
 import { RegisterDto } from './dto/register.dto';
 import { ConfirmDto } from './dto/confirm.dto';
@@ -15,6 +17,7 @@ import { Channel } from '../channels/entities/channel.entity';
 import { EmailAlreadyExistsException } from '../common/exceptions/email-already-exists.exception';
 import { EmailAlreadyConfirmedException } from '../common/exceptions/email-already-confirmed.exception';
 import { InvalidTokenException } from '../common/exceptions/invalid-token.exception';
+import { EmailNotConfirmedException } from '../common/exceptions/email-not-confirmed.exception';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -25,8 +28,11 @@ describe('AuthService', () => {
     >
   >;
   let dataSource: jest.Mocked<Pick<DataSource, 'transaction' | 'manager'>>;
-  let passwordService: jest.Mocked<Pick<PasswordService, 'hash'>>;
+  let passwordService: jest.Mocked<Pick<PasswordService, 'hash' | 'verify'>>;
   let channelService: jest.Mocked<Pick<ChannelService, 'createForUser'>>;
+  let sessionService: jest.Mocked<
+    Pick<SessionService, 'issuePair' | 'setAuthCookies'>
+  >;
   let jwtService: jest.Mocked<Pick<JwtService, 'signAsync' | 'verifyAsync'>>;
   let mailService: jest.Mocked<Pick<MailService, 'sendConfirmation'>>;
 
@@ -50,8 +56,15 @@ describe('AuthService', () => {
         cb(manager as unknown as EntityManager),
       ),
     };
-    passwordService = { hash: jest.fn().mockResolvedValue('hashed-password') };
+    passwordService = {
+      hash: jest.fn().mockResolvedValue('hashed-password'),
+      verify: jest.fn(),
+    };
     channelService = { createForUser: jest.fn() };
+    sessionService = {
+      issuePair: jest.fn(),
+      setAuthCookies: jest.fn(),
+    };
     jwtService = {
       signAsync: jest.fn().mockResolvedValue('confirm-jwt'),
       verifyAsync: jest.fn(),
@@ -64,6 +77,7 @@ describe('AuthService', () => {
         { provide: getDataSourceToken(), useValue: dataSource },
         { provide: PasswordService, useValue: passwordService },
         { provide: ChannelService, useValue: channelService },
+        { provide: SessionService, useValue: sessionService },
         { provide: JwtService, useValue: jwtService },
         { provide: MailService, useValue: mailService },
         {
@@ -273,6 +287,97 @@ describe('AuthService', () => {
         service.resendConfirmation(resendDto),
       ).resolves.toBeUndefined();
       expect(mailService.sendConfirmation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('validateCredentials', () => {
+    function stubUserWithChannel(overrides: Partial<User> = {}): User {
+      return {
+        id: 'user-uuid',
+        email: dto.email,
+        passwordHash: 'hashed-password',
+        isConfirmed: true,
+        channel: { nickname: 'johndoe' } as Channel,
+        ...overrides,
+      } as User;
+    }
+
+    it('returns the user with its channel loaded when the password matches', async () => {
+      const user = stubUserWithChannel();
+      manager.findOne.mockResolvedValue(user);
+      passwordService.verify.mockResolvedValue(true);
+
+      const result = await service.validateCredentials(dto.email, dto.password);
+
+      expect(result).toBe(user);
+      expect(manager.findOne).toHaveBeenCalledWith(User, {
+        where: { email: dto.email },
+        relations: { channel: true },
+      });
+    });
+
+    it('returns null when the e-mail is unknown', async () => {
+      manager.findOne.mockResolvedValue(null);
+
+      const result = await service.validateCredentials(dto.email, dto.password);
+
+      expect(result).toBeNull();
+      expect(passwordService.verify).not.toHaveBeenCalled();
+    });
+
+    it('returns null when the password does not match', async () => {
+      manager.findOne.mockResolvedValue(stubUserWithChannel());
+      passwordService.verify.mockResolvedValue(false);
+
+      const result = await service.validateCredentials(
+        dto.email,
+        'wrong-password',
+      );
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('login', () => {
+    const res = {} as Response;
+    const pair: TokenPair = {
+      accessToken: 'access-jwt',
+      refreshToken: 'refresh-jwt',
+    };
+
+    function stubConfirmedUser(overrides: Partial<User> = {}): User {
+      return {
+        id: 'user-uuid',
+        email: dto.email,
+        isConfirmed: true,
+        channel: { nickname: 'johndoe' } as Channel,
+        ...overrides,
+      } as User;
+    }
+
+    it('issues a session and returns id, email and channel nickname for a confirmed account', async () => {
+      sessionService.issuePair.mockResolvedValue(pair);
+      const user = stubConfirmedUser();
+
+      const result = await service.login(user, res);
+
+      expect(sessionService.issuePair).toHaveBeenCalledWith(user);
+      expect(sessionService.setAuthCookies).toHaveBeenCalledWith(res, pair);
+      expect(result).toEqual({
+        id: 'user-uuid',
+        email: dto.email,
+        channel: { nickname: 'johndoe' },
+      });
+    });
+
+    it('rejects login for an unconfirmed account without issuing a session', async () => {
+      const user = stubConfirmedUser({ isConfirmed: false });
+
+      await expect(service.login(user, res)).rejects.toBeInstanceOf(
+        EmailNotConfirmedException,
+      );
+      expect(sessionService.issuePair).not.toHaveBeenCalled();
+      expect(sessionService.setAuthCookies).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,8 +1,8 @@
-import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { LocalStrategy } from './local.strategy';
 import { AuthService } from '../auth.service';
 import { User } from '../../users/entities/user.entity';
+import { InvalidCredentialsException } from '../../common/exceptions/invalid-credentials.exception';
 
 describe('LocalStrategy', () => {
   let strategy: LocalStrategy;
@@ -37,11 +37,11 @@ describe('LocalStrategy', () => {
     );
   });
 
-  it('throws UnauthorizedException for invalid credentials', async () => {
+  it('throws InvalidCredentialsException for invalid credentials', async () => {
     authService.validateCredentials.mockResolvedValue(null);
 
     await expect(
       strategy.validate('john.doe@gmail.com', 'wrong-password'),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toBeInstanceOf(InvalidCredentialsException);
   });
 });
