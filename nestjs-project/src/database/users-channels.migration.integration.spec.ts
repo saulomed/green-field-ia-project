@@ -28,21 +28,21 @@ describe('users/channels migration (integration)', () => {
     await module.close();
   });
 
+  async function getTableColumns(table: string): Promise<string[]> {
+    const rows: Array<{ column_name: string }> = await db.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND table_schema = 'public'`,
+      [table],
+    );
+    return rows.map((r) => r.column_name);
+  }
+
   it('should have the users table with expected columns', async () => {
-    const rows: Array<{ column_name: string }> = await db.query(`
-      SELECT column_name FROM information_schema.columns
-      WHERE table_name = 'users' AND table_schema = 'public'
-    `);
-    const columns = rows.map((r) => r.column_name);
+    const columns = await getTableColumns('users');
     expect(columns).toEqual(expect.arrayContaining(['id', 'email', 'password_hash', 'is_confirmed', 'created_at', 'updated_at']));
   });
 
   it('should have the channels table with expected columns', async () => {
-    const rows: Array<{ column_name: string }> = await db.query(`
-      SELECT column_name FROM information_schema.columns
-      WHERE table_name = 'channels' AND table_schema = 'public'
-    `);
-    const columns = rows.map((r) => r.column_name);
+    const columns = await getTableColumns('channels');
     expect(columns).toEqual(expect.arrayContaining(['id', 'user_id', 'nickname', 'name', 'description', 'created_at', 'updated_at']));
   });
 
