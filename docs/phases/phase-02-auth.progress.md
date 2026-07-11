@@ -39,8 +39,8 @@
 - **Observations:** @nestjs-modules/mailer@2.1.19 usado (em vez de 2.x latest) pois 2.3.x exige nodemailer>=8 mas o projeto usa nodemailer@6.x; nest-cli.json atualizado com assets hbs para cópia na build
 
 ### SI-02.8 — ChannelService (derivação de nickname a partir do e-mail)
-- **Status:** pending
-- **Tests:** pending
+- **Status:** completed
+- **Tests:** 9 testes unitários em channel.service.spec.ts (normalizePrefix para vários formatos de e-mail; createForUser cria canal sem colisão, com sufixo aleatório em colisão, com retentativas; name = prefixo normalizado; description = null) — todos passando
 - **Observations:** none
 
 ### SI-02.9 — Cadastro de usuário (POST /auth/register)

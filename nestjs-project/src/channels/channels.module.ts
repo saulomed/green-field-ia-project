@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Channel } from './entities/channel.entity';
+import { ChannelService } from './channel.service';
 
 /**
  * Domain module for video channels.
@@ -10,6 +11,7 @@ import { Channel } from './entities/channel.entity';
  */
 @Module({
   imports: [TypeOrmModule.forFeature([Channel])],
-  exports: [TypeOrmModule],
+  providers: [ChannelService],
+  exports: [TypeOrmModule, ChannelService],
 })
 export class ChannelsModule {}
