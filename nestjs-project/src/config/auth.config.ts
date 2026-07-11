@@ -11,7 +11,7 @@ import type { StringValue } from 'ms';
 export const authConfig = registerAs('auth', () => ({
   jwtSecret: process.env.JWT_SECRET as string,
   jwtAccessTtl: process.env.JWT_ACCESS_TTL as StringValue,
-  jwtRefreshTtl: process.env.JWT_REFRESH_TTL as string,
+  jwtRefreshTtl: process.env.JWT_REFRESH_TTL as StringValue,
   confirmTokenTtl: process.env.CONFIRM_TOKEN_TTL as StringValue,
   resetTokenTtl: process.env.RESET_TOKEN_TTL as string,
   argon2: {

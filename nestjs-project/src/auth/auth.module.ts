@@ -8,6 +8,7 @@ import { ChannelsModule } from '../channels/channels.module';
 import { MailModule } from '../mail/mail.module';
 import { PasswordService } from './password.service';
 import { AuthService } from './auth.service';
+import { SessionService } from './session.service';
 import { AuthController } from './auth.controller';
 import { LocalStrategy } from './strategies/local.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -37,7 +38,13 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     MailModule,
   ],
   controllers: [AuthController],
-  providers: [PasswordService, AuthService, LocalStrategy, JwtStrategy],
-  exports: [AuthService],
+  providers: [
+    PasswordService,
+    AuthService,
+    SessionService,
+    LocalStrategy,
+    JwtStrategy,
+  ],
+  exports: [AuthService, SessionService],
 })
 export class AuthModule {}
