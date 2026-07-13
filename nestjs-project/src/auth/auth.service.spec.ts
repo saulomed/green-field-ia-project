@@ -17,21 +17,36 @@ import { Channel } from '../channels/entities/channel.entity';
 import { EmailAlreadyExistsException } from '../common/exceptions/email-already-exists.exception';
 import { EmailAlreadyConfirmedException } from '../common/exceptions/email-already-confirmed.exception';
 import { InvalidTokenException } from '../common/exceptions/invalid-token.exception';
+import { InvalidSessionException } from '../common/exceptions/invalid-session.exception';
 import { EmailNotConfirmedException } from '../common/exceptions/email-not-confirmed.exception';
+import { RefreshTokenReusedException } from '../common/exceptions/refresh-token-reused.exception';
 
 describe('AuthService', () => {
   let service: AuthService;
   let manager: jest.Mocked<
     Pick<
       EntityManager,
-      'exists' | 'create' | 'save' | 'findOneBy' | 'findOne' | 'update'
+      | 'exists'
+      | 'create'
+      | 'save'
+      | 'findOneBy'
+      | 'findOne'
+      | 'update'
+      | 'findOneByOrFail'
     >
   >;
   let dataSource: jest.Mocked<Pick<DataSource, 'transaction' | 'manager'>>;
   let passwordService: jest.Mocked<Pick<PasswordService, 'hash' | 'verify'>>;
   let channelService: jest.Mocked<Pick<ChannelService, 'createForUser'>>;
   let sessionService: jest.Mocked<
-    Pick<SessionService, 'issuePair' | 'setAuthCookies'>
+    Pick<
+      SessionService,
+      | 'issuePair'
+      | 'setAuthCookies'
+      | 'rotate'
+      | 'revokeFamilyForRawToken'
+      | 'clearAuthCookies'
+    >
   >;
   let jwtService: jest.Mocked<Pick<JwtService, 'signAsync' | 'verifyAsync'>>;
   let mailService: jest.Mocked<Pick<MailService, 'sendConfirmation'>>;
@@ -49,6 +64,7 @@ describe('AuthService', () => {
       findOneBy: jest.fn(),
       findOne: jest.fn(),
       update: jest.fn(),
+      findOneByOrFail: jest.fn(),
     };
     dataSource = {
       manager: manager as unknown as EntityManager,
@@ -64,6 +80,9 @@ describe('AuthService', () => {
     sessionService = {
       issuePair: jest.fn(),
       setAuthCookies: jest.fn(),
+      rotate: jest.fn(),
+      revokeFamilyForRawToken: jest.fn(),
+      clearAuthCookies: jest.fn(),
     };
     jwtService = {
       signAsync: jest.fn().mockResolvedValue('confirm-jwt'),
@@ -378,6 +397,76 @@ describe('AuthService', () => {
       );
       expect(sessionService.issuePair).not.toHaveBeenCalled();
       expect(sessionService.setAuthCookies).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('refresh', () => {
+    const res = {} as Response;
+    const pair: TokenPair = {
+      accessToken: 'new-access-jwt',
+      refreshToken: 'new-refresh-jwt',
+    };
+
+    it('rotates the session and returns id and email for the rotated userId', async () => {
+      sessionService.rotate.mockResolvedValue({ pair, userId: 'user-uuid' });
+      manager.findOneByOrFail.mockResolvedValue({
+        id: 'user-uuid',
+        email: dto.email,
+      });
+
+      const result = await service.refresh('raw-refresh-jwt', res);
+
+      expect(sessionService.rotate).toHaveBeenCalledWith('raw-refresh-jwt');
+      expect(sessionService.setAuthCookies).toHaveBeenCalledWith(res, pair);
+      expect(manager.findOneByOrFail).toHaveBeenCalledWith(User, {
+        id: 'user-uuid',
+      });
+      expect(result).toEqual({ id: 'user-uuid', email: dto.email });
+    });
+
+    it('rejects a missing refresh token cookie without calling rotate', async () => {
+      await expect(service.refresh(undefined, res)).rejects.toBeInstanceOf(
+        InvalidSessionException,
+      );
+      expect(sessionService.rotate).not.toHaveBeenCalled();
+    });
+
+    it('maps an invalid/expired/unknown refresh token to InvalidSessionException', async () => {
+      sessionService.rotate.mockRejectedValue(new InvalidTokenException());
+
+      await expect(
+        service.refresh('raw-refresh-jwt', res),
+      ).rejects.toBeInstanceOf(InvalidSessionException);
+    });
+
+    it('propagates reuse detection as-is', async () => {
+      sessionService.rotate.mockRejectedValue(
+        new RefreshTokenReusedException(),
+      );
+
+      await expect(
+        service.refresh('raw-refresh-jwt', res),
+      ).rejects.toBeInstanceOf(RefreshTokenReusedException);
+    });
+  });
+
+  describe('logout', () => {
+    const res = {} as Response;
+
+    it('revokes the family for the refresh cookie and clears both cookies', async () => {
+      await service.logout('raw-refresh-jwt', res);
+
+      expect(sessionService.revokeFamilyForRawToken).toHaveBeenCalledWith(
+        'raw-refresh-jwt',
+      );
+      expect(sessionService.clearAuthCookies).toHaveBeenCalledWith(res);
+    });
+
+    it('still clears cookies when no refresh cookie is present', async () => {
+      await service.logout(undefined, res);
+
+      expect(sessionService.revokeFamilyForRawToken).not.toHaveBeenCalled();
+      expect(sessionService.clearAuthCookies).toHaveBeenCalledWith(res);
     });
   });
 });

@@ -82,7 +82,7 @@ describe('SessionService (integration)', () => {
 
   it('revokes the whole family in the database when reuse is detected, even though rotate() throws', async () => {
     const first = await service.issuePair({ id: userId } as never);
-    const rotated = await service.rotate(first.refreshToken);
+    const { pair: rotated } = await service.rotate(first.refreshToken);
 
     // Replaying the already-rotated (now revoked) refresh token simulates a
     // stolen/reused token — the family must be revoked in the database, not

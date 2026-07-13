@@ -8,16 +8,20 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
+import { RefreshResponseDto } from './dto/refresh-response.dto';
 import { ConfirmDto } from './dto/confirm.dto';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { AuthenticatedRequest } from './types/authenticated-request';
+import { AUTH_COOKIES } from './auth.constants';
+import { readCookie } from './read-cookie';
 
 /**
  * Authentication and account-management endpoints.
@@ -43,6 +47,31 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<LoginResponseDto> {
     return this.authService.login(req.user, res);
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<RefreshResponseDto> {
+    return this.authService.refresh(
+      readCookie(req, AUTH_COOKIES.REFRESH_TOKEN),
+      res,
+    );
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.authService.logout(
+      readCookie(req, AUTH_COOKIES.REFRESH_TOKEN),
+      res,
+    );
   }
 
   @Post('confirm')

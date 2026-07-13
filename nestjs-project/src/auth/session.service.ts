@@ -18,6 +18,11 @@ export interface TokenPair {
   refreshToken: string;
 }
 
+export interface RotateResult {
+  pair: TokenPair;
+  userId: string;
+}
+
 interface RefreshTokenPayload {
   sub: string;
   jti: string;
@@ -64,7 +69,7 @@ export class SessionService {
    * @throws InvalidTokenException if the JWT is invalid/expired or unknown
    * @throws RefreshTokenReusedException if the token was already rotated (reuse)
    */
-  async rotate(rawRefreshToken: string): Promise<TokenPair> {
+  async rotate(rawRefreshToken: string): Promise<RotateResult> {
     let payload: RefreshTokenPayload;
     try {
       payload =
@@ -95,18 +100,41 @@ export class SessionService {
         current.familyId,
         current.id,
       );
-      return { reused: false as const, pair };
+      return { reused: false as const, userId: current.userId, pair };
     });
 
     if (result.reused) {
       throw new RefreshTokenReusedException();
     }
-    return result.pair;
+    return { pair: result.pair, userId: result.userId };
   }
 
   /** Revokes every non-revoked token in a rotation family (logout, reuse detection). */
   async revokeFamily(familyId: string): Promise<void> {
     await this.revokeWhere(this.dataSource.manager, 'family_id', familyId);
+  }
+
+  /**
+   * Resolves the rotation family of a raw refresh token and revokes it
+   * (logout). The token is only decoded, not signature-verified — a
+   * forged or stale `jti` simply matches no row and this becomes a no-op,
+   * so logout can stay best-effort without weakening revocation elsewhere.
+   */
+  async revokeFamilyForRawToken(rawRefreshToken: string): Promise<void> {
+    const payload =
+      this.jwtService.decode<RefreshTokenPayload>(rawRefreshToken);
+    if (!payload?.jti) {
+      return;
+    }
+
+    const current = await this.dataSource.manager.findOneBy(RefreshToken, {
+      jti: payload.jti,
+    });
+    if (!current) {
+      return;
+    }
+
+    await this.revokeFamily(current.familyId);
   }
 
   /** Revokes every non-revoked token belonging to a user, across all families (password reset). */

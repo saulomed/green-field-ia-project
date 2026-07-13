@@ -19,7 +19,9 @@ describe('SessionService', () => {
     >
   >;
   let dataSource: jest.Mocked<Pick<DataSource, 'transaction' | 'manager'>>;
-  let jwtService: jest.Mocked<Pick<JwtService, 'signAsync' | 'verifyAsync'>>;
+  let jwtService: jest.Mocked<
+    Pick<JwtService, 'signAsync' | 'verifyAsync' | 'decode'>
+  >;
   let queryBuilder: {
     update: jest.Mock;
     set: jest.Mock;
@@ -72,6 +74,7 @@ describe('SessionService', () => {
         .mockResolvedValueOnce('access-jwt')
         .mockResolvedValueOnce('refresh-jwt'),
       verifyAsync: jest.fn(),
+      decode: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -119,11 +122,11 @@ describe('SessionService', () => {
       });
       manager.findOneBy.mockResolvedValue(refreshTokenFixture());
 
-      const pair = await service.rotate('raw-refresh-jwt');
+      const result = await service.rotate('raw-refresh-jwt');
 
-      expect(pair).toEqual({
-        accessToken: 'access-jwt',
-        refreshToken: 'refresh-jwt',
+      expect(result).toEqual({
+        userId: user.id,
+        pair: { accessToken: 'access-jwt', refreshToken: 'refresh-jwt' },
       });
       expect(manager.update).toHaveBeenCalledWith(
         RefreshToken,
@@ -180,6 +183,40 @@ describe('SessionService', () => {
       await expect(service.rotate('raw-refresh-jwt')).rejects.toBeInstanceOf(
         InvalidTokenException,
       );
+    });
+  });
+
+  describe('revokeFamilyForRawToken', () => {
+    it('revokes the family resolved from the token jti', async () => {
+      jwtService.decode.mockReturnValue({ sub: user.id, jti: 'old-jti' });
+      manager.findOneBy.mockResolvedValue(refreshTokenFixture());
+
+      await service.revokeFamilyForRawToken('raw-refresh-jwt');
+
+      expect(manager.findOneBy).toHaveBeenCalledWith(RefreshToken, {
+        jti: 'old-jti',
+      });
+      expect(queryBuilder.where).toHaveBeenCalledWith('family_id = :value', {
+        value: 'family-uuid',
+      });
+    });
+
+    it('is a no-op when the token cannot be decoded', async () => {
+      jwtService.decode.mockReturnValue(null);
+
+      await service.revokeFamilyForRawToken('garbage');
+
+      expect(manager.findOneBy).not.toHaveBeenCalled();
+      expect(queryBuilder.execute).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when the jti is unknown', async () => {
+      jwtService.decode.mockReturnValue({ sub: user.id, jti: 'unknown-jti' });
+      manager.findOneBy.mockResolvedValue(null);
+
+      await service.revokeFamilyForRawToken('raw-refresh-jwt');
+
+      expect(queryBuilder.execute).not.toHaveBeenCalled();
     });
   });
 

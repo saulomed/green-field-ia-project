@@ -7,17 +7,19 @@ import { Response } from 'express';
 import { User } from '../users/entities/user.entity';
 import { ChannelService } from '../channels/channel.service';
 import { PasswordService } from './password.service';
-import { SessionService } from './session.service';
+import { SessionService, TokenPair } from './session.service';
 import { MailService } from '../mail/mail.service';
 import { AuthConfig } from '../config/auth.config';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
+import { RefreshResponseDto } from './dto/refresh-response.dto';
 import { ConfirmDto } from './dto/confirm.dto';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto';
 import { EmailAlreadyExistsException } from '../common/exceptions/email-already-exists.exception';
 import { EmailAlreadyConfirmedException } from '../common/exceptions/email-already-confirmed.exception';
 import { InvalidTokenException } from '../common/exceptions/invalid-token.exception';
+import { InvalidSessionException } from '../common/exceptions/invalid-session.exception';
 import { EmailNotConfirmedException } from '../common/exceptions/email-not-confirmed.exception';
 import { JWT_PURPOSE } from './auth.constants';
 
@@ -186,6 +188,60 @@ export class AuthService {
       email: user.email,
       channel: { nickname: user.channel.nickname },
     };
+  }
+
+  /**
+   * Rotates the session identified by the raw refresh token cookie, issuing
+   * a fresh access/refresh pair.
+   *
+   * @param rawRefreshToken - Raw refresh JWT from the `refresh_token` cookie, if present
+   * @param res - Response the rotated session cookies are attached to
+   * @throws InvalidSessionException if the cookie is absent, malformed, or unknown
+   * @throws RefreshTokenReusedException if the token had already been rotated (reuse)
+   */
+  async refresh(
+    rawRefreshToken: string | undefined,
+    res: Response,
+  ): Promise<RefreshResponseDto> {
+    if (!rawRefreshToken) {
+      throw new InvalidSessionException();
+    }
+
+    let userId: string;
+    let pair: TokenPair;
+    try {
+      ({ pair, userId } = await this.sessionService.rotate(rawRefreshToken));
+    } catch (err) {
+      if (err instanceof InvalidTokenException) {
+        throw new InvalidSessionException();
+      }
+      throw err;
+    }
+
+    this.sessionService.setAuthCookies(res, pair);
+
+    const user = await this.dataSource.manager.findOneByOrFail(User, {
+      id: userId,
+    });
+
+    return { id: user.id, email: user.email };
+  }
+
+  /**
+   * Ends the current session: revokes the rotation family tied to the
+   * refresh token cookie (if resolvable) and clears both session cookies.
+   *
+   * @param rawRefreshToken - Raw refresh JWT from the `refresh_token` cookie, if present
+   * @param res - Response the cookie clearing is attached to
+   */
+  async logout(
+    rawRefreshToken: string | undefined,
+    res: Response,
+  ): Promise<void> {
+    if (rawRefreshToken) {
+      await this.sessionService.revokeFamilyForRawToken(rawRefreshToken);
+    }
+    this.sessionService.clearAuthCookies(res);
   }
 
   private async verifyConfirmToken(

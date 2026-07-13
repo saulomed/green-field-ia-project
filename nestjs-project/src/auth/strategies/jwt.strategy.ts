@@ -5,14 +5,14 @@ import { Strategy } from 'passport-jwt';
 import { Request } from 'express';
 import { AuthConfig } from '../../config/auth.config';
 import { AUTH_COOKIES } from '../auth.constants';
+import { readCookie } from '../read-cookie';
 
 export interface AccessTokenPayload {
   sub: string;
 }
 
 export function cookieExtractor(req: Request): string | null {
-  const token: unknown = req?.cookies?.[AUTH_COOKIES.ACCESS_TOKEN];
-  return typeof token === 'string' ? token : null;
+  return readCookie(req, AUTH_COOKIES.ACCESS_TOKEN) ?? null;
 }
 
 /**
