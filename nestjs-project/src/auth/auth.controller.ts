@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
@@ -17,11 +18,17 @@ import { LoginResponseDto } from './dto/login-response.dto';
 import { RefreshResponseDto } from './dto/refresh-response.dto';
 import { ConfirmDto } from './dto/confirm.dto';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { AuthenticatedRequest } from './types/authenticated-request';
 import { AUTH_COOKIES } from './auth.constants';
 import { readCookie } from './read-cookie';
+import {
+  AUTH_THROTTLE,
+  THROTTLER_NAME,
+} from '../common/constants/throttle.constants';
 
 /**
  * Authentication and account-management endpoints.
@@ -40,6 +47,7 @@ export class AuthController {
 
   @Post('login')
   @UseGuards(LocalAuthGuard)
+  @Throttle({ [THROTTLER_NAME]: AUTH_THROTTLE.LOGIN })
   @HttpCode(HttpStatus.OK)
   async login(
     @Body() _dto: LoginDto,
@@ -81,8 +89,22 @@ export class AuthController {
   }
 
   @Post('resend-confirmation')
+  @Throttle({ [THROTTLER_NAME]: AUTH_THROTTLE.RESEND_CONFIRMATION })
   @HttpCode(HttpStatus.NO_CONTENT)
   async resendConfirmation(@Body() dto: ResendConfirmationDto): Promise<void> {
     await this.authService.resendConfirmation(dto);
+  }
+
+  @Post('forgot-password')
+  @Throttle({ [THROTTLER_NAME]: AUTH_THROTTLE.FORGOT_PASSWORD })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<void> {
+    await this.authService.forgotPassword(dto);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<void> {
+    await this.authService.resetPassword(dto);
   }
 }

@@ -2,11 +2,14 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthConfig } from '../config/auth.config';
 import { UsersModule } from '../users/users.module';
 import { ChannelsModule } from '../channels/channels.module';
 import { MailModule } from '../mail/mail.module';
+import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { PasswordService } from './password.service';
+import { PasswordResetTokenService } from './password-reset-token.service';
 import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
 import { AuthController } from './auth.controller';
@@ -33,6 +36,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         };
       },
     }),
+    TypeOrmModule.forFeature([PasswordResetToken]),
     UsersModule,
     ChannelsModule,
     MailModule,
@@ -40,6 +44,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   controllers: [AuthController],
   providers: [
     PasswordService,
+    PasswordResetTokenService,
     AuthService,
     SessionService,
     LocalStrategy,

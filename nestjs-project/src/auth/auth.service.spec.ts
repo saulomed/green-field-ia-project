@@ -8,10 +8,13 @@ import { AuthService } from './auth.service';
 import { PasswordService } from './password.service';
 import { ChannelService } from '../channels/channel.service';
 import { SessionService, TokenPair } from './session.service';
+import { PasswordResetTokenService } from './password-reset-token.service';
 import { MailService } from '../mail/mail.service';
 import { RegisterDto } from './dto/register.dto';
 import { ConfirmDto } from './dto/confirm.dto';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { User } from '../users/entities/user.entity';
 import { Channel } from '../channels/entities/channel.entity';
 import { EmailAlreadyExistsException } from '../common/exceptions/email-already-exists.exception';
@@ -45,11 +48,17 @@ describe('AuthService', () => {
       | 'setAuthCookies'
       | 'rotate'
       | 'revokeFamilyForRawToken'
+      | 'revokeAllForUser'
       | 'clearAuthCookies'
     >
   >;
+  let passwordResetTokenService: jest.Mocked<
+    Pick<PasswordResetTokenService, 'issue' | 'consume' | 'invalidateAll'>
+  >;
   let jwtService: jest.Mocked<Pick<JwtService, 'signAsync' | 'verifyAsync'>>;
-  let mailService: jest.Mocked<Pick<MailService, 'sendConfirmation'>>;
+  let mailService: jest.Mocked<
+    Pick<MailService, 'sendConfirmation' | 'sendPasswordReset'>
+  >;
 
   const dto: RegisterDto = {
     email: 'john.doe@gmail.com',
@@ -82,13 +91,22 @@ describe('AuthService', () => {
       setAuthCookies: jest.fn(),
       rotate: jest.fn(),
       revokeFamilyForRawToken: jest.fn(),
+      revokeAllForUser: jest.fn(),
       clearAuthCookies: jest.fn(),
+    };
+    passwordResetTokenService = {
+      issue: jest.fn().mockResolvedValue('raw-reset-token'),
+      consume: jest.fn(),
+      invalidateAll: jest.fn().mockResolvedValue(undefined),
     };
     jwtService = {
       signAsync: jest.fn().mockResolvedValue('confirm-jwt'),
       verifyAsync: jest.fn(),
     };
-    mailService = { sendConfirmation: jest.fn().mockResolvedValue(undefined) };
+    mailService = {
+      sendConfirmation: jest.fn().mockResolvedValue(undefined),
+      sendPasswordReset: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -97,6 +115,10 @@ describe('AuthService', () => {
         { provide: PasswordService, useValue: passwordService },
         { provide: ChannelService, useValue: channelService },
         { provide: SessionService, useValue: sessionService },
+        {
+          provide: PasswordResetTokenService,
+          useValue: passwordResetTokenService,
+        },
         { provide: JwtService, useValue: jwtService },
         { provide: MailService, useValue: mailService },
         {
@@ -467,6 +489,82 @@ describe('AuthService', () => {
 
       expect(sessionService.revokeFamilyForRawToken).not.toHaveBeenCalled();
       expect(sessionService.clearAuthCookies).toHaveBeenCalledWith(res);
+    });
+  });
+
+  describe('forgotPassword', () => {
+    const forgotDto: ForgotPasswordDto = { email: dto.email };
+
+    function stubUserWithChannel(overrides: Partial<User> = {}): User {
+      return {
+        id: 'user-uuid',
+        email: dto.email,
+        channel: { name: 'johndoe' } as Channel,
+        ...overrides,
+      } as User;
+    }
+
+    it('invalidates pending tokens, issues a new one and e-mails it for a known account', async () => {
+      manager.findOne.mockResolvedValue(stubUserWithChannel());
+
+      await service.forgotPassword(forgotDto);
+
+      expect(passwordResetTokenService.invalidateAll).toHaveBeenCalledWith(
+        'user-uuid',
+      );
+      expect(passwordResetTokenService.issue).toHaveBeenCalledWith('user-uuid');
+      expect(mailService.sendPasswordReset).toHaveBeenCalledWith(
+        dto.email,
+        'johndoe',
+        'raw-reset-token',
+      );
+    });
+
+    it('resolves neutrally without side effects when no account exists for the e-mail', async () => {
+      manager.findOne.mockResolvedValue(null);
+
+      await expect(service.forgotPassword(forgotDto)).resolves.toBeUndefined();
+
+      expect(passwordResetTokenService.invalidateAll).not.toHaveBeenCalled();
+      expect(passwordResetTokenService.issue).not.toHaveBeenCalled();
+      expect(mailService.sendPasswordReset).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetPassword', () => {
+    const resetDto: ResetPasswordDto = {
+      token: 'raw-reset-token',
+      password: 'new-super-secret',
+    };
+
+    it('consumes the token, updates the password and revokes every session', async () => {
+      passwordResetTokenService.consume.mockResolvedValue('user-uuid');
+
+      await service.resetPassword(resetDto);
+
+      expect(passwordResetTokenService.consume).toHaveBeenCalledWith(
+        'raw-reset-token',
+      );
+      expect(passwordService.hash).toHaveBeenCalledWith('new-super-secret');
+      expect(manager.update).toHaveBeenCalledWith(User, 'user-uuid', {
+        passwordHash: 'hashed-password',
+      });
+      expect(passwordResetTokenService.invalidateAll).toHaveBeenCalledWith(
+        'user-uuid',
+      );
+      expect(sessionService.revokeAllForUser).toHaveBeenCalledWith('user-uuid');
+    });
+
+    it('propagates an invalid, expired or already-used token without updating anything', async () => {
+      passwordResetTokenService.consume.mockRejectedValue(
+        new InvalidTokenException(),
+      );
+
+      await expect(service.resetPassword(resetDto)).rejects.toBeInstanceOf(
+        InvalidTokenException,
+      );
+      expect(manager.update).not.toHaveBeenCalled();
+      expect(sessionService.revokeAllForUser).not.toHaveBeenCalled();
     });
   });
 });

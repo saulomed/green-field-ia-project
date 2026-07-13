@@ -8,6 +8,7 @@ import { User } from '../users/entities/user.entity';
 import { ChannelService } from '../channels/channel.service';
 import { PasswordService } from './password.service';
 import { SessionService, TokenPair } from './session.service';
+import { PasswordResetTokenService } from './password-reset-token.service';
 import { MailService } from '../mail/mail.service';
 import { AuthConfig } from '../config/auth.config';
 import { RegisterDto } from './dto/register.dto';
@@ -16,6 +17,8 @@ import { LoginResponseDto } from './dto/login-response.dto';
 import { RefreshResponseDto } from './dto/refresh-response.dto';
 import { ConfirmDto } from './dto/confirm.dto';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { EmailAlreadyExistsException } from '../common/exceptions/email-already-exists.exception';
 import { EmailAlreadyConfirmedException } from '../common/exceptions/email-already-confirmed.exception';
 import { InvalidTokenException } from '../common/exceptions/invalid-token.exception';
@@ -44,6 +47,7 @@ export class AuthService {
     private readonly passwordService: PasswordService,
     private readonly channelService: ChannelService,
     private readonly sessionService: SessionService,
+    private readonly passwordResetTokenService: PasswordResetTokenService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
@@ -242,6 +246,52 @@ export class AuthService {
       await this.sessionService.revokeFamilyForRawToken(rawRefreshToken);
     }
     this.sessionService.clearAuthCookies(res);
+  }
+
+  /**
+   * Requests a password reset for the given e-mail. Always resolves without
+   * revealing whether the e-mail belongs to an account — the caller receives
+   * a neutral response either way. For a known account, any pending reset
+   * tokens are invalidated before a fresh one is issued and e-mailed.
+   */
+  async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
+    const user = await this.dataSource.manager.findOne(User, {
+      where: { email: dto.email },
+      relations: { channel: true },
+      select: { channel: { name: true } },
+    });
+
+    if (user) {
+      const [, token] = await Promise.all([
+        this.passwordResetTokenService.invalidateAll(user.id),
+        this.passwordResetTokenService.issue(user.id),
+      ]);
+      await this.mailService.sendPasswordReset(
+        user.email,
+        user.channel.name,
+        token,
+      );
+    }
+  }
+
+  /**
+   * Redeems a password reset token: hashes and persists the new password,
+   * invalidates any other pending reset tokens, and revokes every active
+   * session for the user.
+   *
+   * @throws InvalidTokenException if the token is absent, expired, or already used
+   */
+  async resetPassword(dto: ResetPasswordDto): Promise<void> {
+    const [userId, passwordHash] = await Promise.all([
+      this.passwordResetTokenService.consume(dto.token),
+      this.passwordService.hash(dto.password),
+    ]);
+
+    await this.dataSource.manager.update(User, userId, { passwordHash });
+    await Promise.all([
+      this.passwordResetTokenService.invalidateAll(userId),
+      this.sessionService.revokeAllForUser(userId),
+    ]);
   }
 
   private async verifyConfirmToken(

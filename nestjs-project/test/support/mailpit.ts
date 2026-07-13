@@ -46,6 +46,18 @@ export async function awaitMessageTo(
 }
 
 /**
+ * Extracts the `token=...` query value from a Mailpit message's plain-text
+ * body — every transactional e-mail (confirm, reset) links back with this
+ * pattern.
+ *
+ * @author Saulo Santos
+ * @date 13/07/2026
+ */
+export function extractToken(message: MailpitMessage): string {
+  return message.Text.match(/token=(\S+)/)![1];
+}
+
+/**
  * Polls Mailpit until at least `expectedCount` messages have been received
  * for `email`, up to `timeoutMs`.
  *
