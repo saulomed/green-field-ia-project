@@ -1,37 +1,53 @@
 import { Injectable } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { Channel } from './entities/channel.entity';
 import { User } from '../users/entities/user.entity';
 
 /**
  * Creates and manages user channels, deriving nickname from the email prefix.
+ * Owns all persistence for the channels table.
  *
  * @author Saulo Santos
  * @date 11/07/2026
  */
 @Injectable()
 export class ChannelService {
+  constructor(
+    @InjectRepository(Channel)
+    private readonly channelRepository: Repository<Channel>,
+  ) {}
+
   /**
-   * Creates a channel for the given user within the provided transaction.
-   * The nickname is derived from the email prefix (normalized to [a-z0-9]).
-   * Collisions are resolved by appending a 4-character random alphanumeric suffix.
+   * Creates a channel for the given user. The nickname is derived from the
+   * email prefix (normalized to [a-z0-9]); collisions are resolved by appending
+   * a 4-character random alphanumeric suffix.
    *
    * @param user - The owning user
-   * @param manager - EntityManager from the caller's transaction
+   * @param manager - Optional EntityManager to join the caller's transaction
    * @returns The persisted Channel entity
    */
-  async createForUser(user: User, manager: EntityManager): Promise<Channel> {
+  async createForUser(user: User, manager?: EntityManager): Promise<Channel> {
+    const repository = this.resolveRepository(manager);
     const base = this.normalizePrefix(user.email);
-    const nickname = await this.resolveNickname(base, manager);
+    const nickname = await this.resolveNickname(base, repository);
 
-    const channel = manager.create(Channel, {
+    const channel = repository.create({
       userId: user.id,
       nickname,
       name: base,
       description: null,
     });
 
-    return manager.save(Channel, channel);
+    return repository.save(channel);
+  }
+
+  /**
+   * @param userId - Owning user id
+   * @returns The user's channel, or null when the user has none
+   */
+  async findByUserId(userId: string): Promise<Channel | null> {
+    return this.channelRepository.findOneBy({ userId });
   }
 
   /**
@@ -43,24 +59,25 @@ export class ChannelService {
     return prefix.toLowerCase().replace(/[^a-z0-9]/g, '');
   }
 
+  /**
+   * A transactional manager owns its own repository instances; the injected one
+   * would run outside the caller's transaction.
+   */
+  private resolveRepository(manager?: EntityManager): Repository<Channel> {
+    return manager ? manager.getRepository(Channel) : this.channelRepository;
+  }
+
   private async resolveNickname(
     base: string,
-    manager: EntityManager,
+    repository: Repository<Channel>,
   ): Promise<string> {
     let candidate = base;
 
-    while (await this.nicknameExists(candidate, manager)) {
+    while (await repository.exists({ where: { nickname: candidate } })) {
       candidate = `${base}-${this.randomSuffix()}`;
     }
 
     return candidate;
-  }
-
-  private async nicknameExists(
-    nickname: string,
-    manager: EntityManager,
-  ): Promise<boolean> {
-    return manager.exists(Channel, { where: { nickname } });
   }
 
   private randomSuffix(): string {
