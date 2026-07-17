@@ -244,6 +244,8 @@ As decisões DT-03 e DT-04 dependem de DT-01. DT-06 é independente da estratég
 
 **Decisão:** **Opção A** — backend-only; telas adiadas. (O link de confirmação/reset nos e-mails apontará para a futura rota do frontend via `APP_BASE_URL`.)
 
+**Correção (pós-implementação):** a implementação inicial montou o link apontando para o próprio path da API (`/auth/confirm`, `/auth/reset-password`), que só aceita POST com o token no body — um link de e-mail sempre abre via GET no navegador, então o clique nunca bateria na rota. Corrigido para apontar a paths de página dedicados, distintos dos paths da API: `/confirm-account` e `/reset-password` (placeholders para as rotas que a futura fase de frontend deve implementar; a página lerá o `token` da query string via GET e então chamará o POST real da API com o token no body).
+
 ---
 
 ## DT-10: Política de colisão de nickname do canal

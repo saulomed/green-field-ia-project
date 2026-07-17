@@ -30,7 +30,7 @@ export class MailService {
    * @param token - JWT confirmation token appended to the link
    */
   async sendConfirmation(email: string, name: string, token: string): Promise<void> {
-    const link = `${this.appBaseUrl}/auth/confirm?token=${token}`;
+    const link = `${this.appBaseUrl}/confirm-account?token=${token}`;
     await this.mailerService.sendMail({
       to: email,
       subject: 'Confirme sua conta no StreamTube',
@@ -48,7 +48,7 @@ export class MailService {
    * @param token - Opaque reset token appended to the link
    */
   async sendPasswordReset(email: string, name: string, token: string): Promise<void> {
-    const link = `${this.appBaseUrl}/auth/reset-password?token=${token}`;
+    const link = `${this.appBaseUrl}/reset-password?token=${token}`;
     await this.mailerService.sendMail({
       to: email,
       subject: 'Redefinição de senha do StreamTube',

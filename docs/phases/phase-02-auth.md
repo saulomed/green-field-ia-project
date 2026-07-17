@@ -179,7 +179,7 @@ Entregar a API de autenticação do StreamTube (`nestjs-project/`): cadastro com
 
 - Instalar `@nestjs-modules/mailer@^2.0.0` e `nodemailer@^6.9.0` (+ `handlebars`).
 - Configurar `MailerModule.forRootAsync` injetando `mailConfig` (`ConfigType`): transport SMTP (`host`, `port`, `auth`), `defaults.from` e `HandlebarsAdapter` apontando para `src/mail/templates/`.
-- Criar os templates `confirm-account.hbs` e `reset-password.hbs` (nome do usuário + link com token montado a partir de `APP_BASE_URL`).
+- Criar os templates `confirm-account.hbs` e `reset-password.hbs` (nome do usuário + link com token montado a partir de `APP_BASE_URL`). O link aponta para um path de **página do frontend** (`/confirm-account`, `/reset-password` — placeholder até a fase de frontend existir), nunca para o path da própria API (`/auth/confirm`, `/auth/reset-password`), já que estes só aceitam POST com o token no body; a página é quem lerá o token da query string (GET) e disparará o POST real.
 - Criar `MailService` (`src/mail/mail.service.ts`) com `sendConfirmation(email, name, token)` e `sendPasswordReset(email, name, token)` via `mailerService.sendMail`.
 
 **Testes:**
