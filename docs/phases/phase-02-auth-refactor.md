@@ -132,13 +132,13 @@ _(IE-02.17 e IE-02.18 são independentes e podem ser implementadas em paralelo; 
 
 ## Entregáveis
 
-- [ ] `ChannelService` injeta `Repository<Channel>` e opera com ou sem `EntityManager` do chamador (padrão híbrido de DT-B)
-- [ ] `ChannelService` é o único ponto que deriva, normaliza e resolve colisão de nickname; expõe `findByUserId` para consumo externo
-- [ ] `UsersService` criado como dono exclusivo da persistência de `User`, com o mesmo padrão híbrido
-- [ ] `ChannelsModule` e `UsersModule` deixam de exportar `TypeOrmModule` — repositórios encapsulados, acessíveis apenas via os serviços
-- [ ] `AuthService` não executa nenhuma operação de banco direta, exceto abrir a transação de `register`
-- [ ] `AuthService` não carrega mais `relations: { channel: true }` — dados de canal vêm do `ChannelService`
-- [ ] Nenhuma migration, mudança de schema ou alteração de contrato de API
-- [ ] Todos os testes unitários passam (`docker compose -f nestjs-project/compose.yaml exec nestjs-api npm test`)
-- [ ] Testes E2E passam sem edição (`docker compose -f nestjs-project/compose.yaml exec nestjs-api npm run test:e2e`)
-- [ ] Build e verificação de tipos passam (`docker compose -f nestjs-project/compose.yaml exec nestjs-api npm run build`)
+- [x] `ChannelService` injeta `Repository<Channel>` e opera com ou sem `EntityManager` do chamador (padrão híbrido de DT-B)
+- [x] `ChannelService` é o único ponto que deriva, normaliza e resolve colisão de nickname; expõe `findByUserId` para consumo externo
+- [x] `UsersService` criado como dono exclusivo da persistência de `User`, com o mesmo padrão híbrido
+- [x] `ChannelsModule` e `UsersModule` deixam de exportar `TypeOrmModule` — repositórios encapsulados, acessíveis apenas via os serviços
+- [x] `AuthService` não executa nenhuma operação de banco direta, exceto abrir a transação de `register`
+- [x] `AuthService` não carrega mais `relations: { channel: true }` — dados de canal vêm do `ChannelService`
+- [x] Nenhuma migration, mudança de schema ou alteração de contrato de API
+- [x] Todos os testes unitários passam (`docker compose -f nestjs-project/compose.yaml exec nestjs-api npm test`)
+- [x] Testes E2E passam sem edição (`docker compose -f nestjs-project/compose.yaml exec nestjs-api npm run test:e2e`)
+- [x] Build e verificação de tipos passam (`docker compose -f nestjs-project/compose.yaml exec nestjs-api npm run build`)

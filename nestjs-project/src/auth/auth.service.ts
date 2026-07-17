@@ -5,6 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import { Response } from 'express';
 import { User } from '../users/entities/user.entity';
+import { UsersService } from '../users/users.service';
 import { ChannelService } from '../channels/channel.service';
 import { PasswordService } from './password.service';
 import { SessionService, TokenPair } from './session.service';
@@ -45,6 +46,7 @@ export class AuthService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly passwordService: PasswordService,
+    private readonly usersService: UsersService,
     private readonly channelService: ChannelService,
     private readonly sessionService: SessionService,
     private readonly passwordResetTokenService: PasswordResetTokenService,
@@ -64,9 +66,7 @@ export class AuthService {
    * @throws EmailAlreadyExistsException if the e-mail is already registered
    */
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
-    const emailTaken = await this.dataSource.manager.exists(User, {
-      where: { email: dto.email },
-    });
+    const emailTaken = await this.usersService.existsByEmail(dto.email);
     if (emailTaken) {
       throw new EmailAlreadyExistsException();
     }
@@ -75,19 +75,18 @@ export class AuthService {
 
     const { user, channel } = await this.dataSource.transaction(
       async (manager) => {
-        const emailExists = await manager.exists(User, {
-          where: { email: dto.email },
-        });
+        const emailExists = await this.usersService.existsByEmail(
+          dto.email,
+          manager,
+        );
         if (emailExists) {
           throw new EmailAlreadyExistsException();
         }
 
-        const user = manager.create(User, {
-          email: dto.email,
-          passwordHash,
-          isConfirmed: false,
-        });
-        await manager.save(User, user);
+        const user = await this.usersService.create(
+          { email: dto.email, passwordHash },
+          manager,
+        );
 
         const channel = await this.channelService.createForUser(user, manager);
 
@@ -113,9 +112,7 @@ export class AuthService {
   async confirmAccount(dto: ConfirmDto): Promise<void> {
     const payload = await this.verifyConfirmToken(dto.token);
 
-    const user = await this.dataSource.manager.findOneBy(User, {
-      id: payload.sub,
-    });
+    const user = await this.usersService.findById(payload.sub);
     if (!user) {
       throw new InvalidTokenException();
     }
@@ -123,9 +120,7 @@ export class AuthService {
       throw new EmailAlreadyConfirmedException();
     }
 
-    await this.dataSource.manager.update(User, user.id, {
-      isConfirmed: true,
-    });
+    await this.usersService.markConfirmed(user.id);
   }
 
   /**
@@ -135,21 +130,16 @@ export class AuthService {
    * Previously issued confirmation JWTs remain valid until they expire.
    */
   async resendConfirmation(dto: ResendConfirmationDto): Promise<void> {
-    const user = await this.dataSource.manager.findOne(User, {
-      where: { email: dto.email },
-      relations: { channel: true },
-      select: { channel: { name: true } },
-    });
+    const user = await this.usersService.findByEmail(dto.email);
 
     if (user && !user.isConfirmed) {
-      await this.sendConfirmationEmail(user, user.channel.name);
+      const channel = await this.channelService.findByUserId(user.id);
+      await this.sendConfirmationEmail(user, channel!.name);
     }
   }
 
   /**
    * Verifies e-mail/password credentials for the local login strategy.
-   * Loads the user's channel alongside it, since a successful login needs
-   * the nickname for its response.
    *
    * @returns The matching user, or `null` if the e-mail is unknown or the password is wrong
    */
@@ -157,10 +147,7 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<User | null> {
-    const user = await this.dataSource.manager.findOne(User, {
-      where: { email },
-      relations: { channel: true },
-    });
+    const user = await this.usersService.findByEmail(email);
     if (!user) {
       return null;
     }
@@ -175,7 +162,7 @@ export class AuthService {
   /**
    * Issues a session for a user already authenticated by LocalAuthGuard.
    *
-   * @param user - The credential-validated user, with its channel loaded
+   * @param user - The credential-validated user
    * @param res - Response the session cookies are attached to
    * @throws EmailNotConfirmedException if the account's e-mail is not confirmed
    */
@@ -184,13 +171,16 @@ export class AuthService {
       throw new EmailNotConfirmedException();
     }
 
-    const pair = await this.sessionService.issuePair(user);
+    const [pair, channel] = await Promise.all([
+      this.sessionService.issuePair(user),
+      this.channelService.findByUserId(user.id),
+    ]);
     this.sessionService.setAuthCookies(res, pair);
 
     return {
       id: user.id,
       email: user.email,
-      channel: { nickname: user.channel.nickname },
+      channel: { nickname: channel!.nickname },
     };
   }
 
@@ -224,9 +214,10 @@ export class AuthService {
 
     this.sessionService.setAuthCookies(res, pair);
 
-    const user = await this.dataSource.manager.findOneByOrFail(User, {
-      id: userId,
-    });
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new InvalidSessionException();
+    }
 
     return { id: user.id, email: user.email };
   }
@@ -255,20 +246,17 @@ export class AuthService {
    * tokens are invalidated before a fresh one is issued and e-mailed.
    */
   async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
-    const user = await this.dataSource.manager.findOne(User, {
-      where: { email: dto.email },
-      relations: { channel: true },
-      select: { channel: { name: true } },
-    });
+    const user = await this.usersService.findByEmail(dto.email);
 
     if (user) {
-      const [, token] = await Promise.all([
+      const [, token, channel] = await Promise.all([
         this.passwordResetTokenService.invalidateAll(user.id),
         this.passwordResetTokenService.issue(user.id),
+        this.channelService.findByUserId(user.id),
       ]);
       await this.mailService.sendPasswordReset(
         user.email,
-        user.channel.name,
+        channel!.name,
         token,
       );
     }
@@ -287,7 +275,7 @@ export class AuthService {
       this.passwordService.hash(dto.password),
     ]);
 
-    await this.dataSource.manager.update(User, userId, { passwordHash });
+    await this.usersService.updatePassword(userId, passwordHash);
     await Promise.all([
       this.passwordResetTokenService.invalidateAll(userId),
       this.sessionService.revokeAllForUser(userId),

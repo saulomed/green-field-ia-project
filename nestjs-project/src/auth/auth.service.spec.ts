@@ -6,6 +6,7 @@ import { DataSource, EntityManager } from 'typeorm';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { PasswordService } from './password.service';
+import { UsersService } from '../users/users.service';
 import { ChannelService } from '../channels/channel.service';
 import { SessionService, TokenPair } from './session.service';
 import { PasswordResetTokenService } from './password-reset-token.service';
@@ -26,21 +27,23 @@ import { RefreshTokenReusedException } from '../common/exceptions/refresh-token-
 
 describe('AuthService', () => {
   let service: AuthService;
-  let manager: jest.Mocked<
+  let transactionManager: EntityManager;
+  let dataSource: jest.Mocked<Pick<DataSource, 'transaction'>>;
+  let passwordService: jest.Mocked<Pick<PasswordService, 'hash' | 'verify'>>;
+  let usersService: jest.Mocked<
     Pick<
-      EntityManager,
-      | 'exists'
+      UsersService,
+      | 'existsByEmail'
       | 'create'
-      | 'save'
-      | 'findOneBy'
-      | 'findOne'
-      | 'update'
-      | 'findOneByOrFail'
+      | 'findByEmail'
+      | 'findById'
+      | 'markConfirmed'
+      | 'updatePassword'
     >
   >;
-  let dataSource: jest.Mocked<Pick<DataSource, 'transaction' | 'manager'>>;
-  let passwordService: jest.Mocked<Pick<PasswordService, 'hash' | 'verify'>>;
-  let channelService: jest.Mocked<Pick<ChannelService, 'createForUser'>>;
+  let channelService: jest.Mocked<
+    Pick<ChannelService, 'createForUser' | 'findByUserId'>
+  >;
   let sessionService: jest.Mocked<
     Pick<
       SessionService,
@@ -66,26 +69,28 @@ describe('AuthService', () => {
   };
 
   beforeEach(async () => {
-    manager = {
-      exists: jest.fn(),
-      create: jest.fn(),
-      save: jest.fn(),
-      findOneBy: jest.fn(),
-      findOne: jest.fn(),
-      update: jest.fn(),
-      findOneByOrFail: jest.fn(),
-    };
+    transactionManager = {} as EntityManager;
     dataSource = {
-      manager: manager as unknown as EntityManager,
       transaction: jest.fn((cb: (m: EntityManager) => unknown) =>
-        cb(manager as unknown as EntityManager),
+        cb(transactionManager),
       ),
     };
     passwordService = {
       hash: jest.fn().mockResolvedValue('hashed-password'),
       verify: jest.fn(),
     };
-    channelService = { createForUser: jest.fn() };
+    usersService = {
+      existsByEmail: jest.fn().mockResolvedValue(false),
+      create: jest.fn(),
+      findByEmail: jest.fn().mockResolvedValue(null),
+      findById: jest.fn().mockResolvedValue(null),
+      markConfirmed: jest.fn().mockResolvedValue(undefined),
+      updatePassword: jest.fn().mockResolvedValue(undefined),
+    };
+    channelService = {
+      createForUser: jest.fn(),
+      findByUserId: jest.fn().mockResolvedValue(null),
+    };
     sessionService = {
       issuePair: jest.fn(),
       setAuthCookies: jest.fn(),
@@ -113,6 +118,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: getDataSourceToken(), useValue: dataSource },
         { provide: PasswordService, useValue: passwordService },
+        { provide: UsersService, useValue: usersService },
         { provide: ChannelService, useValue: channelService },
         { provide: SessionService, useValue: sessionService },
         {
@@ -132,10 +138,8 @@ describe('AuthService', () => {
   });
 
   function stubSuccessfulPersist(): User {
-    manager.exists.mockResolvedValue(false);
     const user = { id: 'user-uuid', email: dto.email } as User;
-    manager.create.mockReturnValue(user);
-    manager.save.mockResolvedValue(user);
+    usersService.create.mockResolvedValue(user);
     channelService.createForUser.mockResolvedValue({
       id: 'ch-uuid',
       nickname: 'johndoe',
@@ -144,35 +148,63 @@ describe('AuthService', () => {
     return user;
   }
 
-  it('hashes the password before persisting the user', async () => {
+  it('hashes the password before handing it to UsersService', async () => {
     stubSuccessfulPersist();
 
     await service.register(dto);
 
     expect(passwordService.hash).toHaveBeenCalledWith(dto.password);
-    expect(manager.create).toHaveBeenCalledWith(User, {
-      email: dto.email,
-      passwordHash: 'hashed-password',
-      isConfirmed: false,
-    });
+    expect(usersService.create).toHaveBeenCalledWith(
+      { email: dto.email, passwordHash: 'hashed-password' },
+      transactionManager,
+    );
+  });
+
+  it('persists user and channel within the same transaction', async () => {
+    const user = stubSuccessfulPersist();
+
+    await service.register(dto);
+
+    expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(usersService.create).toHaveBeenCalledWith(
+      expect.anything(),
+      transactionManager,
+    );
+    expect(channelService.createForUser).toHaveBeenCalledWith(
+      user,
+      transactionManager,
+    );
   });
 
   it('rejects registration when the e-mail already exists', async () => {
-    manager.exists.mockResolvedValue(true);
+    usersService.existsByEmail.mockResolvedValue(true);
 
     await expect(service.register(dto)).rejects.toBeInstanceOf(
       EmailAlreadyExistsException,
     );
 
-    expect(manager.save).not.toHaveBeenCalled();
+    expect(usersService.create).not.toHaveBeenCalled();
+    expect(channelService.createForUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects registration when the e-mail is taken inside the transaction', async () => {
+    usersService.existsByEmail
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    await expect(service.register(dto)).rejects.toBeInstanceOf(
+      EmailAlreadyExistsException,
+    );
+
+    expect(usersService.create).not.toHaveBeenCalled();
     expect(channelService.createForUser).not.toHaveBeenCalled();
   });
 
   it('propagates a channel-creation failure so the transaction rolls back', async () => {
-    manager.exists.mockResolvedValue(false);
-    const user = { id: 'user-uuid', email: dto.email } as User;
-    manager.create.mockReturnValue(user);
-    manager.save.mockResolvedValue(user);
+    usersService.create.mockResolvedValue({
+      id: 'user-uuid',
+      email: dto.email,
+    } as User);
     channelService.createForUser.mockRejectedValue(
       new Error('nickname collision limit'),
     );
@@ -238,13 +270,11 @@ describe('AuthService', () => {
         sub: 'user-uuid',
         purpose: 'confirm',
       });
-      manager.findOneBy.mockResolvedValue(stubUser());
+      usersService.findById.mockResolvedValue(stubUser());
 
       await service.confirmAccount(confirmDto);
 
-      expect(manager.update).toHaveBeenCalledWith(User, 'user-uuid', {
-        isConfirmed: true,
-      });
+      expect(usersService.markConfirmed).toHaveBeenCalledWith('user-uuid');
     });
 
     it('rejects an expired or invalid JWT', async () => {
@@ -253,7 +283,7 @@ describe('AuthService', () => {
       await expect(service.confirmAccount(confirmDto)).rejects.toBeInstanceOf(
         InvalidTokenException,
       );
-      expect(manager.update).not.toHaveBeenCalled();
+      expect(usersService.markConfirmed).not.toHaveBeenCalled();
     });
 
     it('rejects a token whose purpose is not "confirm"', async () => {
@@ -265,7 +295,20 @@ describe('AuthService', () => {
       await expect(service.confirmAccount(confirmDto)).rejects.toBeInstanceOf(
         InvalidTokenException,
       );
-      expect(manager.update).not.toHaveBeenCalled();
+      expect(usersService.markConfirmed).not.toHaveBeenCalled();
+    });
+
+    it('rejects a token whose subject no longer exists', async () => {
+      jwtService.verifyAsync.mockResolvedValue({
+        sub: 'user-uuid',
+        purpose: 'confirm',
+      });
+      usersService.findById.mockResolvedValue(null);
+
+      await expect(service.confirmAccount(confirmDto)).rejects.toBeInstanceOf(
+        InvalidTokenException,
+      );
+      expect(usersService.markConfirmed).not.toHaveBeenCalled();
     });
 
     it('rejects confirming an already-confirmed account', async () => {
@@ -273,37 +316,36 @@ describe('AuthService', () => {
         sub: 'user-uuid',
         purpose: 'confirm',
       });
-      manager.findOneBy.mockResolvedValue(stubUser({ isConfirmed: true }));
+      usersService.findById.mockResolvedValue(stubUser({ isConfirmed: true }));
 
       await expect(service.confirmAccount(confirmDto)).rejects.toBeInstanceOf(
         EmailAlreadyConfirmedException,
       );
-      expect(manager.update).not.toHaveBeenCalled();
+      expect(usersService.markConfirmed).not.toHaveBeenCalled();
     });
   });
 
   describe('resendConfirmation', () => {
     const resendDto: ResendConfirmationDto = { email: dto.email };
 
-    function stubUserWithChannel(overrides: Partial<User> = {}): User {
+    function stubUser(overrides: Partial<User> = {}): User {
       return {
         id: 'user-uuid',
         email: dto.email,
         isConfirmed: false,
-        channel: { name: 'johndoe' } as Channel,
         ...overrides,
       } as User;
     }
 
-    it('sends a new confirmation e-mail for a pending account', async () => {
-      manager.findOne.mockResolvedValue(stubUserWithChannel());
+    it('asks ChannelService for the channel name instead of loading the relation', async () => {
+      usersService.findByEmail.mockResolvedValue(stubUser());
+      channelService.findByUserId.mockResolvedValue({
+        name: 'johndoe',
+      } as Channel);
 
       await service.resendConfirmation(resendDto);
 
-      expect(jwtService.signAsync).toHaveBeenCalledWith(
-        { sub: 'user-uuid', purpose: 'confirm' },
-        { expiresIn: '24h' },
-      );
+      expect(channelService.findByUserId).toHaveBeenCalledWith('user-uuid');
       expect(mailService.sendConfirmation).toHaveBeenCalledWith(
         dto.email,
         'johndoe',
@@ -312,8 +354,8 @@ describe('AuthService', () => {
     });
 
     it('does not send an e-mail for an already-confirmed account', async () => {
-      manager.findOne.mockResolvedValue(
-        stubUserWithChannel({ isConfirmed: true }),
+      usersService.findByEmail.mockResolvedValue(
+        stubUser({ isConfirmed: true }),
       );
 
       await service.resendConfirmation(resendDto);
@@ -322,7 +364,7 @@ describe('AuthService', () => {
     });
 
     it('resolves neutrally when no account exists for the e-mail', async () => {
-      manager.findOne.mockResolvedValue(null);
+      usersService.findByEmail.mockResolvedValue(null);
 
       await expect(
         service.resendConfirmation(resendDto),
@@ -332,33 +374,29 @@ describe('AuthService', () => {
   });
 
   describe('validateCredentials', () => {
-    function stubUserWithChannel(overrides: Partial<User> = {}): User {
+    function stubUser(overrides: Partial<User> = {}): User {
       return {
         id: 'user-uuid',
         email: dto.email,
         passwordHash: 'hashed-password',
         isConfirmed: true,
-        channel: { nickname: 'johndoe' } as Channel,
         ...overrides,
       } as User;
     }
 
-    it('returns the user with its channel loaded when the password matches', async () => {
-      const user = stubUserWithChannel();
-      manager.findOne.mockResolvedValue(user);
+    it('returns the user when the password matches', async () => {
+      const user = stubUser();
+      usersService.findByEmail.mockResolvedValue(user);
       passwordService.verify.mockResolvedValue(true);
 
       const result = await service.validateCredentials(dto.email, dto.password);
 
       expect(result).toBe(user);
-      expect(manager.findOne).toHaveBeenCalledWith(User, {
-        where: { email: dto.email },
-        relations: { channel: true },
-      });
+      expect(usersService.findByEmail).toHaveBeenCalledWith(dto.email);
     });
 
     it('returns null when the e-mail is unknown', async () => {
-      manager.findOne.mockResolvedValue(null);
+      usersService.findByEmail.mockResolvedValue(null);
 
       const result = await service.validateCredentials(dto.email, dto.password);
 
@@ -367,7 +405,7 @@ describe('AuthService', () => {
     });
 
     it('returns null when the password does not match', async () => {
-      manager.findOne.mockResolvedValue(stubUserWithChannel());
+      usersService.findByEmail.mockResolvedValue(stubUser());
       passwordService.verify.mockResolvedValue(false);
 
       const result = await service.validateCredentials(
@@ -391,19 +429,22 @@ describe('AuthService', () => {
         id: 'user-uuid',
         email: dto.email,
         isConfirmed: true,
-        channel: { nickname: 'johndoe' } as Channel,
         ...overrides,
       } as User;
     }
 
-    it('issues a session and returns id, email and channel nickname for a confirmed account', async () => {
+    it('issues a session and gets the nickname from ChannelService', async () => {
       sessionService.issuePair.mockResolvedValue(pair);
+      channelService.findByUserId.mockResolvedValue({
+        nickname: 'johndoe',
+      } as Channel);
       const user = stubConfirmedUser();
 
       const result = await service.login(user, res);
 
       expect(sessionService.issuePair).toHaveBeenCalledWith(user);
       expect(sessionService.setAuthCookies).toHaveBeenCalledWith(res, pair);
+      expect(channelService.findByUserId).toHaveBeenCalledWith('user-uuid');
       expect(result).toEqual({
         id: 'user-uuid',
         email: dto.email,
@@ -431,18 +472,16 @@ describe('AuthService', () => {
 
     it('rotates the session and returns id and email for the rotated userId', async () => {
       sessionService.rotate.mockResolvedValue({ pair, userId: 'user-uuid' });
-      manager.findOneByOrFail.mockResolvedValue({
+      usersService.findById.mockResolvedValue({
         id: 'user-uuid',
         email: dto.email,
-      });
+      } as User);
 
       const result = await service.refresh('raw-refresh-jwt', res);
 
       expect(sessionService.rotate).toHaveBeenCalledWith('raw-refresh-jwt');
       expect(sessionService.setAuthCookies).toHaveBeenCalledWith(res, pair);
-      expect(manager.findOneByOrFail).toHaveBeenCalledWith(User, {
-        id: 'user-uuid',
-      });
+      expect(usersService.findById).toHaveBeenCalledWith('user-uuid');
       expect(result).toEqual({ id: 'user-uuid', email: dto.email });
     });
 
@@ -455,6 +494,15 @@ describe('AuthService', () => {
 
     it('maps an invalid/expired/unknown refresh token to InvalidSessionException', async () => {
       sessionService.rotate.mockRejectedValue(new InvalidTokenException());
+
+      await expect(
+        service.refresh('raw-refresh-jwt', res),
+      ).rejects.toBeInstanceOf(InvalidSessionException);
+    });
+
+    it('rejects a rotated session whose user no longer exists', async () => {
+      sessionService.rotate.mockResolvedValue({ pair, userId: 'user-uuid' });
+      usersService.findById.mockResolvedValue(null);
 
       await expect(
         service.refresh('raw-refresh-jwt', res),
@@ -495,17 +543,14 @@ describe('AuthService', () => {
   describe('forgotPassword', () => {
     const forgotDto: ForgotPasswordDto = { email: dto.email };
 
-    function stubUserWithChannel(overrides: Partial<User> = {}): User {
-      return {
+    it('invalidates pending tokens, issues a new one and e-mails it for a known account', async () => {
+      usersService.findByEmail.mockResolvedValue({
         id: 'user-uuid',
         email: dto.email,
-        channel: { name: 'johndoe' } as Channel,
-        ...overrides,
-      } as User;
-    }
-
-    it('invalidates pending tokens, issues a new one and e-mails it for a known account', async () => {
-      manager.findOne.mockResolvedValue(stubUserWithChannel());
+      } as User);
+      channelService.findByUserId.mockResolvedValue({
+        name: 'johndoe',
+      } as Channel);
 
       await service.forgotPassword(forgotDto);
 
@@ -513,6 +558,7 @@ describe('AuthService', () => {
         'user-uuid',
       );
       expect(passwordResetTokenService.issue).toHaveBeenCalledWith('user-uuid');
+      expect(channelService.findByUserId).toHaveBeenCalledWith('user-uuid');
       expect(mailService.sendPasswordReset).toHaveBeenCalledWith(
         dto.email,
         'johndoe',
@@ -521,7 +567,7 @@ describe('AuthService', () => {
     });
 
     it('resolves neutrally without side effects when no account exists for the e-mail', async () => {
-      manager.findOne.mockResolvedValue(null);
+      usersService.findByEmail.mockResolvedValue(null);
 
       await expect(service.forgotPassword(forgotDto)).resolves.toBeUndefined();
 
@@ -546,9 +592,10 @@ describe('AuthService', () => {
         'raw-reset-token',
       );
       expect(passwordService.hash).toHaveBeenCalledWith('new-super-secret');
-      expect(manager.update).toHaveBeenCalledWith(User, 'user-uuid', {
-        passwordHash: 'hashed-password',
-      });
+      expect(usersService.updatePassword).toHaveBeenCalledWith(
+        'user-uuid',
+        'hashed-password',
+      );
       expect(passwordResetTokenService.invalidateAll).toHaveBeenCalledWith(
         'user-uuid',
       );
@@ -563,7 +610,7 @@ describe('AuthService', () => {
       await expect(service.resetPassword(resetDto)).rejects.toBeInstanceOf(
         InvalidTokenException,
       );
-      expect(manager.update).not.toHaveBeenCalled();
+      expect(usersService.updatePassword).not.toHaveBeenCalled();
       expect(sessionService.revokeAllForUser).not.toHaveBeenCalled();
     });
   });
