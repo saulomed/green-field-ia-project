@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { UsersService } from './users.service';
 import { User } from './entities/user.entity';
+import { ChannelService } from '../channels/channel.service';
 
 type UserRepositoryMock = jest.Mocked<
   Pick<Repository<User>, 'exists' | 'create' | 'save' | 'findOneBy' | 'update'>
@@ -35,6 +36,10 @@ describe('UsersService', () => {
         {
           provide: getRepositoryToken(User),
           useValue: injectedRepository,
+        },
+        {
+          provide: ChannelService,
+          useValue: { findByUserId: jest.fn().mockResolvedValue(null) },
         },
       ],
     }).compile();

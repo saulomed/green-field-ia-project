@@ -1,0 +1,100 @@
+### StreamTube API - Requisições de teste
+### Requer extensão REST Client (VS Code) ou similar
+### Ambiente: docker compose up -d (ver CLAUDE.md)
+
+@baseUrl = http://localhost:3000
+@email = testuser@example.com
+@password = SenhaForte123
+
+### =========================================================
+### AppController
+### =========================================================
+
+### Health check
+GET {{baseUrl}}/
+
+
+### =========================================================
+### AuthController - Fluxo de cadastro e confirmação
+### =========================================================
+
+### 1. Registrar novo usuário (cria user + channel)
+# @name register
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+
+### 2. Reenviar e-mail de confirmação (caso necessário)
+POST {{baseUrl}}/auth/resend-confirmation
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
+
+### 3. Confirmar conta (o link do e-mail aponta direto para este GET)
+# Cole o token recebido por e-mail (ver mailpit em http://localhost:8025).
+# Este é exatamente o endpoint que o link do e-mail abre no navegador.
+GET {{baseUrl}}/auth/confirm?token=COLE_O_TOKEN_DE_CONFIRMACAO_AQUI
+
+
+### =========================================================
+### AuthController - Login, refresh e logout
+### =========================================================
+
+### 4. Login (seta cookies httpOnly access_token / refresh_token)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+
+### 5. Renovar tokens (usa cookie refresh_token; rotaciona o refresh token)
+POST {{baseUrl}}/auth/refresh
+
+
+### 6. Logout (requer cookie access_token válido)
+POST {{baseUrl}}/auth/logout
+
+
+### =========================================================
+### UsersController - Perfil do usuário autenticado
+### =========================================================
+
+### 6.1. Perfil do usuário logado (usa o cookie access_token do login)
+# Faça o login (passo 4) antes: o REST Client reaproveita o cookie automaticamente.
+GET {{baseUrl}}/users/me
+
+
+### =========================================================
+### AuthController - Recuperação de senha
+### =========================================================
+
+### 7. Solicitar recuperação de senha
+POST {{baseUrl}}/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
+
+### 8. Efetivar troca de senha
+# Cole o token recebido por e-mail (ver mailpit em http://localhost:8025)
+POST {{baseUrl}}/auth/reset-password
+Content-Type: application/json
+
+{
+  "token": "COLE_O_TOKEN_DE_RESET_AQUI",
+  "password": "NovaSenhaForte456"
+}
