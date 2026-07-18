@@ -54,8 +54,8 @@ describe('MailService', () => {
       expect(call.context.name).toBe('Alice');
       expect(call.context.link).toContain('jwt-token-123');
       expect(call.context.link).toContain(APP_BASE_URL);
-      expect(call.context.link).toContain('/confirm-account?token=');
-      expect(call.context.link).not.toContain('/auth/confirm');
+      expect(call.context.link).toContain('/auth/confirm?token=');
+      expect(call.context.link).not.toContain('/confirm-account');
     });
   });
 

@@ -10,9 +10,13 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
-import { awaitMessageTo, awaitMessageCountTo } from './support/mailpit';
+import {
+  awaitMessageTo,
+  awaitMessageCountTo,
+  extractToken,
+} from './support/mailpit';
 
-describe('Auth — POST /auth/confirm, /auth/resend-confirmation (e2e)', () => {
+describe('Auth — GET /auth/confirm, POST /auth/resend-confirmation (e2e)', () => {
   let app: INestApplication<App>;
   let db: DataSource;
 
@@ -56,16 +60,17 @@ describe('Auth — POST /auth/confirm, /auth/resend-confirmation (e2e)', () => {
       .expect(201);
   }
 
+  function confirmAccount(token: string) {
+    return request(app.getHttpServer()).get('/auth/confirm').query({ token });
+  }
+
   it('activates the account with a valid confirmation token', async () => {
     const email = 'e2e-confirm-success@example.com';
     await registerUser(email);
     const message = await awaitMessageTo(email);
-    const token = message!.Text.match(/token=(\S+)/)![1];
+    const token = extractToken(message!);
 
-    await request(app.getHttpServer())
-      .post('/auth/confirm')
-      .send({ token })
-      .expect(204);
+    await confirmAccount(token).expect(204);
 
     const [user] = await db.query<Array<{ is_confirmed: boolean }>>(
       `SELECT is_confirmed FROM users WHERE email = $1`,
@@ -75,10 +80,7 @@ describe('Auth — POST /auth/confirm, /auth/resend-confirmation (e2e)', () => {
   });
 
   it('rejects an invalid or expired confirmation token', async () => {
-    const response = await request(app.getHttpServer())
-      .post('/auth/confirm')
-      .send({ token: 'not-a-real-jwt' })
-      .expect(400);
+    const response = await confirmAccount('not-a-real-jwt').expect(400);
 
     expect(response.body).toMatchObject({
       statusCode: 400,
@@ -90,17 +92,11 @@ describe('Auth — POST /auth/confirm, /auth/resend-confirmation (e2e)', () => {
     const email = 'e2e-confirm-duplicate@example.com';
     await registerUser(email);
     const message = await awaitMessageTo(email);
-    const token = message!.Text.match(/token=(\S+)/)![1];
+    const token = extractToken(message!);
 
-    await request(app.getHttpServer())
-      .post('/auth/confirm')
-      .send({ token })
-      .expect(204);
+    await confirmAccount(token).expect(204);
 
-    const response = await request(app.getHttpServer())
-      .post('/auth/confirm')
-      .send({ token })
-      .expect(409);
+    const response = await confirmAccount(token).expect(409);
 
     expect(response.body).toMatchObject({
       statusCode: 409,

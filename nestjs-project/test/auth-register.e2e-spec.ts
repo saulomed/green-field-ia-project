@@ -112,6 +112,6 @@ describe('Auth — POST /auth/register (e2e)', () => {
 
     expect(message).toBeDefined();
     expect(message!.Subject).toContain('Confirme sua conta');
-    expect(message!.Text).toContain('/confirm-account?token=');
+    expect(message!.Text).toContain('/auth/confirm?token=');
   });
 });

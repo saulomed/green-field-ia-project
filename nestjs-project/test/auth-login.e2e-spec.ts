@@ -61,8 +61,8 @@ describe('Auth — POST /auth/login (e2e)', () => {
     const token = message!.Text.match(/token=(\S+)/)![1];
 
     await request(app.getHttpServer())
-      .post('/auth/confirm')
-      .send({ token })
+      .get('/auth/confirm')
+      .query({ token })
       .expect(204);
   }
 

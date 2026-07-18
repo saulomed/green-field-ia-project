@@ -246,6 +246,8 @@ As decisões DT-03 e DT-04 dependem de DT-01. DT-06 é independente da estratég
 
 **Correção (pós-implementação):** a implementação inicial montou o link apontando para o próprio path da API (`/auth/confirm`, `/auth/reset-password`), que só aceita POST com o token no body — um link de e-mail sempre abre via GET no navegador, então o clique nunca bateria na rota. Corrigido para apontar a paths de página dedicados, distintos dos paths da API: `/confirm-account` e `/reset-password` (placeholders para as rotas que a futura fase de frontend deve implementar; a página lerá o `token` da query string via GET e então chamará o POST real da API com o token no body).
 
+**Revisão (confirmação → GET direto na API):** a confirmação de conta não exige nenhum dado do usuário além do token, então não precisa de tela intermediária. `POST /auth/confirm` foi convertido em `GET /auth/confirm?token=...` (token na query string) e o link do e-mail volta a apontar direto para o endpoint da API — o clique no link confirma a conta sem passar pelo frontend. A operação continua sendo uma mutação idempotente protegida por token de uso efetivamente único (replay → `EMAIL_JA_CONFIRMADO`); o principal trade-off aceito é que `GET` é pré-buscável por scanners/proxies de e-mail, o que pode disparar a confirmação automaticamente — risco baixo dado o token assinado e expirável (24h). **O reset de senha permanece apontando para a página de frontend `/reset-password`**, pois exige um formulário para o usuário digitar a nova senha; seu `POST /auth/reset-password` (token + nova senha no body) é mantido.
+
 ---
 
 ## DT-10: Política de colisão de nickname do canal

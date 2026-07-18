@@ -30,7 +30,7 @@ export class MailService {
    * @param token - JWT confirmation token appended to the link
    */
   async sendConfirmation(email: string, name: string, token: string): Promise<void> {
-    const link = `${this.appBaseUrl}/confirm-account?token=${token}`;
+    const link = `${this.appBaseUrl}/auth/confirm?token=${token}`;
     await this.mailerService.sendMail({
       to: email,
       subject: 'Confirme sua conta no StreamTube',

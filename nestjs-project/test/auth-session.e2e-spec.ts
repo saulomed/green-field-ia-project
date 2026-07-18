@@ -74,8 +74,8 @@ describe('Auth — POST /auth/refresh, /auth/logout (e2e)', () => {
     const message = await awaitMessageTo(email);
     const token = message!.Text.match(/token=(\S+)/)![1];
     await request(app.getHttpServer())
-      .post('/auth/confirm')
-      .send({ token })
+      .get('/auth/confirm')
+      .query({ token })
       .expect(204);
 
     const response = await request(app.getHttpServer())

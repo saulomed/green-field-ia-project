@@ -1,7 +1,7 @@
 import { IsNotEmpty, IsString } from 'class-validator';
 
 /**
- * Request body for POST /auth/confirm.
+ * Query parameters for GET /auth/confirm.
  *
  * @author Saulo Santos
  * @date 11/07/2026

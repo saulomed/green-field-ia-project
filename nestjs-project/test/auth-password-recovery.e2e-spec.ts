@@ -44,8 +44,8 @@ describe('Auth — POST /auth/forgot-password, /auth/reset-password (e2e)', () =
 
     const confirmMessage = await awaitMessageTo(email);
     await request(app.getHttpServer())
-      .post('/auth/confirm')
-      .send({ token: extractToken(confirmMessage!) })
+      .get('/auth/confirm')
+      .query({ token: extractToken(confirmMessage!) })
       .expect(204);
 
     const response = await request(app.getHttpServer())

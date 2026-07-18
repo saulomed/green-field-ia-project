@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -82,9 +84,9 @@ export class AuthController {
     );
   }
 
-  @Post('confirm')
+  @Get('confirm')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async confirm(@Body() dto: ConfirmDto): Promise<void> {
+  async confirm(@Query() dto: ConfirmDto): Promise<void> {
     await this.authService.confirmAccount(dto);
   }
 
