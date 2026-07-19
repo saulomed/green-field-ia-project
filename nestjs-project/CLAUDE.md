@@ -68,6 +68,17 @@ npm run lint                             # ESLint with auto-fix
 npm run format                           # Prettier formatting
 ```
 
+## Installing Dependencies Inside the Container
+
+The `node_modules` directory lives on a **bind mount**. The host owns it as uid `1001`, but the container runs as `node` (uid `1000`). Because of this mismatch, `docker compose exec nestjs-api npm install <pkg>` as the `node` user frequently fails with `EACCES` (seen with `argon2`/`@emnapi`, `@nestjs/throttler`, and others). The same mismatch breaks CLI-generated artifacts (e.g. migrations) that need write access to a source directory.
+
+**Canonical procedure (requires the user's explicit authorization before running anything as root):**
+
+1. Install once as root: `docker compose exec -u root nestjs-api npm install <pkg>`
+2. **Immediately** restore ownership so future installs as `node` keep working: `docker compose exec -u root nestjs-api chown -R node:node node_modules`
+
+Do **not** leave `node_modules` owned by root, and do **not** `chmod 777` directories as a permanent fix — restore `node:node` ownership instead. Always ask the user before the root step; never run it silently.
+
 ## Long-running Processes
 
 Commands that never exit (dev server, watch modes) must be run in background in the Bash tool — otherwise the agent blocks indefinitely waiting for the process to return.
@@ -87,6 +98,7 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 - **Decorators:** `emitDecoratorMetadata` + `experimentalDecorators` enabled — required for NestJS DI
 - **Prettier:** single quotes, trailing commas everywhere
 - **ESLint:** `no-explicit-any` allowed; `no-floating-promises` and `no-unsafe-argument` are warnings
+- **TypeORM `entities` glob:** resolve it relative to `__dirname` (e.g. `join(__dirname, '**/*.entity.{ts,js}')`), never a hardcoded `dist/**/*.entity.js`. A `dist/`-only path does not exist under ts-jest/ts-node and breaks every test that loads `AppModule`; a `__dirname`-relative `{ts,js}` glob works in both ts-jest and the compiled `dist` build.
 
 ## REST Conventions
 
@@ -102,6 +114,7 @@ Always:
 - Retrieve the corresponding documentation using context7
 - Cross-reference APIs to avoid deprecated or incompatible patterns
 - Follow the official documentation over training data
+- **Check peer dependencies and transitive `@types` before installing or upgrading.** Picking the "latest" version has broken the build here more than once: `@nestjs-modules/mailer@2.3.x` requires `nodemailer>=8` while this project uses `nodemailer@6` (pinned to `2.1.19`), and installing `@types/passport-jwt` pulled a newer `@types/jsonwebtoken` whose `expiresIn` type changed from `string` to `ms`'s `StringValue`. Verify compatibility with the versions already in `package.json`, not just the API surface.
 
 Skip documentation lookup only for trivial operations such as:
 

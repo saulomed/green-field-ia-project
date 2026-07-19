@@ -57,3 +57,11 @@ async findOne(@Param('id') id: string) {
 - If a controller-specific transformation is truly needed (rare), apply a filter at the controller or method level with `@UseFilters()` instead of inline try/catch
 - Never return manually crafted error objects (`{ error: '...' }`) — always throw so the filter layer controls the response format
 - Apply `ValidationPipe` globally or per-route
+
+## Account-Existence Endpoints Must Respond Neutrally
+
+Endpoints that take an email/identifier and would reveal whether an account exists — **resend confirmation, forgot/reset password, and similar** — must return an **identical, neutral response regardless of whether the account exists** (e.g. always `204`). Never let the status code, body, or timing branch on "email found vs not found": that leaks account enumeration.
+
+- The service does the work only if the account exists, and resolves silently (no throw) when it does not — the controller returns the same success either way.
+- This is a deliberate security invariant, not dead code. Keep it: `resendConfirmation`, `forgotPassword` follow this pattern in Phase 02.
+- Reset/confirm with an invalid or already-used token is a different case — those DO return an error (`400 TOKEN_INVALIDO`), because the token, not the account's existence, is what failed.

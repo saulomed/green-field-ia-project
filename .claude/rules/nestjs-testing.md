@@ -21,6 +21,21 @@ description: 'Testing conventions for NestJS unit and e2e tests'
 - Use a real database — connect to the Docker `db` service (env vars from `.env` are available inside the container)
 - **Table cleanup:** `repository.delete({})` throws `Empty criteria(s) are not allowed`. Use `dataSource.query('DELETE FROM table_name')` or `repository.clear()` to wipe tables between tests
 
+### Transactional logic REQUIRES an integration test
+
+Any method whose correctness depends on **commit/rollback semantics** MUST have an integration test against the real Postgres — a unit test with mocked `dataSource.transaction`/`EntityManager` gives a false green because the mock executes the callback directly, with no real commit or rollback.
+
+This bit hard once: `SessionService.rotate` threw its exception *inside* `dataSource.transaction(...)`, so TypeORM rolled the whole transaction back and the family revocation (the entire point of the SI) was silently never persisted — yet every mocked unit test passed. The regression was only caught by an integration test against real Postgres.
+
+Triggers that make an integration test mandatory:
+
+- Persisting state and then conditionally throwing in the same transaction (rollback may undo the persist you intended to keep)
+- Session/token rotation, bulk revocation, reuse detection
+- Relying on a **unique constraint** (e.g. `23505`) to arbitrate concurrent inserts — mocks never enforce constraints
+- Any behavior asserted purely by "the exception was thrown" when the durable side effect is what actually matters
+
+To confirm the test really covers the bug class, temporarily revert the fix and watch it fail, then restore.
+
 ## E2E Tests (`*.e2e-spec.ts`)
 
 - Place e2e tests in the `test/` directory
