@@ -14,12 +14,16 @@ const baseEnv = {
 describe('envValidationSchema', () => {
   describe('defaults', () => {
     it('should apply PORT=3000 when PORT is absent', () => {
-      const { value } = envValidationSchema.validate(baseEnv, { allowUnknown: true });
+      const { value } = envValidationSchema.validate(baseEnv, {
+        allowUnknown: true,
+      });
       expect(value.PORT).toBe(3000);
     });
 
     it('should apply NODE_ENV=development when NODE_ENV is absent', () => {
-      const { value } = envValidationSchema.validate(baseEnv, { allowUnknown: true });
+      const { value } = envValidationSchema.validate(baseEnv, {
+        allowUnknown: true,
+      });
       expect(value.NODE_ENV).toBe('development');
     });
   });
@@ -95,22 +99,30 @@ describe('envValidationSchema', () => {
 
   describe('JWT TTL defaults', () => {
     it('should apply JWT_ACCESS_TTL=15m when absent', () => {
-      const { value } = envValidationSchema.validate(baseEnv, { allowUnknown: true });
+      const { value } = envValidationSchema.validate(baseEnv, {
+        allowUnknown: true,
+      });
       expect(value.JWT_ACCESS_TTL).toBe('15m');
     });
 
     it('should apply JWT_REFRESH_TTL=7d when absent', () => {
-      const { value } = envValidationSchema.validate(baseEnv, { allowUnknown: true });
+      const { value } = envValidationSchema.validate(baseEnv, {
+        allowUnknown: true,
+      });
       expect(value.JWT_REFRESH_TTL).toBe('7d');
     });
 
     it('should apply CONFIRM_TOKEN_TTL=24h when absent', () => {
-      const { value } = envValidationSchema.validate(baseEnv, { allowUnknown: true });
+      const { value } = envValidationSchema.validate(baseEnv, {
+        allowUnknown: true,
+      });
       expect(value.CONFIRM_TOKEN_TTL).toBe('24h');
     });
 
     it('should apply RESET_TOKEN_TTL=1h when absent', () => {
-      const { value } = envValidationSchema.validate(baseEnv, { allowUnknown: true });
+      const { value } = envValidationSchema.validate(baseEnv, {
+        allowUnknown: true,
+      });
       expect(value.RESET_TOKEN_TTL).toBe('1h');
     });
 
@@ -126,12 +138,16 @@ describe('envValidationSchema', () => {
 
   describe('cookie defaults', () => {
     it('should apply COOKIE_SECURE=false when absent', () => {
-      const { value } = envValidationSchema.validate(baseEnv, { allowUnknown: true });
+      const { value } = envValidationSchema.validate(baseEnv, {
+        allowUnknown: true,
+      });
       expect(value.COOKIE_SECURE).toBe(false);
     });
 
     it('should apply COOKIE_SAMESITE=strict when absent', () => {
-      const { value } = envValidationSchema.validate(baseEnv, { allowUnknown: true });
+      const { value } = envValidationSchema.validate(baseEnv, {
+        allowUnknown: true,
+      });
       expect(value.COOKIE_SAMESITE).toBe('strict');
     });
 
@@ -142,6 +158,26 @@ describe('envValidationSchema', () => {
       );
       expect(error).toBeDefined();
       expect(error?.message).toContain('COOKIE_SAMESITE');
+    });
+  });
+
+  describe('SWAGGER_PATH', () => {
+    it('should apply SWAGGER_PATH=api/docs when absent', () => {
+      const { value } = envValidationSchema.validate(baseEnv, {
+        allowUnknown: true,
+      });
+      expect(value.SWAGGER_PATH).toBe('api/docs');
+    });
+  });
+
+  describe('SWAGGER_ENABLED', () => {
+    it('should reject a non-boolean SWAGGER_ENABLED value', () => {
+      const { error } = envValidationSchema.validate(
+        { ...baseEnv, SWAGGER_ENABLED: 'nao-booleano' },
+        { allowUnknown: true },
+      );
+      expect(error).toBeDefined();
+      expect(error?.message).toContain('SWAGGER_ENABLED');
     });
   });
 

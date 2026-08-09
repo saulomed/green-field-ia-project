@@ -100,6 +100,20 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 - **ESLint:** `no-explicit-any` allowed; `no-floating-promises` and `no-unsafe-argument` are warnings
 - **TypeORM `entities` glob:** resolve it relative to `__dirname` (e.g. `join(__dirname, '**/*.entity.{ts,js}')`), never a hardcoded `dist/**/*.entity.js`. A `dist/`-only path does not exist under ts-jest/ts-node and breaks every test that loads `AppModule`; a `__dirname`-relative `{ts,js}` glob works in both ts-jest and the compiled `dist` build.
 
+## OpenAPI Documentation
+
+The `@nestjs/swagger` CLI plugin (`nest-cli.json` → `compilerOptions.plugins`) infers most OpenAPI metadata automatically from DTOs: `classValidatorShim` translates `class-validator` decorators (`@IsEmail`, `@Length`, etc.) into schema constraints, and `introspectComments` turns JSDoc into `description`. Use `@ApiProperty()` explicitly only for: providing `example` values, or disambiguating cases where the plugin's inference is ambiguous (e.g., union types, computed/derived fields). Never use `@ApiProperty()` to redeclare a constraint that `class-validator` already expresses — that duplicates the source of truth and risks drift between validation and documentation.
+
+## OpenAPI Artifact Generation
+
+`nestjs-project/openapi.json` is a versioned, on-demand snapshot of the OpenAPI 3.0 document (`openapi-spec/TD-04`) — regenerate it whenever a controller/DTO contract changes:
+
+```bash
+docker compose run --rm nestjs-api npm run openapi:generate
+```
+
+This is **never** a `postbuild` hook: `generate-openapi.ts` boots the full `AppModule` context (needs Postgres, Mailpit, and every required env var reachable), so it must run inside the Compose network with the app's dependencies up. The script itself runs against the **compiled build** (`nest build && node dist/openapi/generate-openapi.js`), not `ts-node` directly — the `@nestjs/swagger` CLI compiler plugin (`nest-cli.json`) is only applied by the `nest build`/`nest start` pipeline; plain `tsc`/`ts-node` ignore `compilerOptions.plugins` entirely, which would silently produce DTO schemas with empty `properties: {}`.
+
 ## REST Conventions
 
 This is a RESTful API. All endpoints must follow standard REST conventions — correct HTTP methods, proper status codes, plural resource nouns, and consistent URL structure. Details are enforced via rules on controller files.

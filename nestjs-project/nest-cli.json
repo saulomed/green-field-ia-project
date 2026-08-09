@@ -4,6 +4,19 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
-    "assets": [{ "include": "**/*.hbs", "watchAssets": true }]
+    "assets": [{ "include": "**/*.hbs", "watchAssets": true }],
+    "plugins": [
+      {
+        "name": "@nestjs/swagger",
+        "options": {
+          "dtoFileNameSuffix": [".dto.ts"],
+          "introspectComments": true,
+          "classValidatorShim": true,
+          "dtoKeyOfComment": "description",
+          "controllerKeyOfComment": "description",
+          "introspectDefaultValues": true
+        }
+      }
+    ]
   }
 }
