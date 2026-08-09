@@ -58,5 +58,5 @@ test("login page renders the form and submits", async ({ page }) => {
 ## Examples from this project
 
 - `app/page.tsx` — sync Server Component, presentational only, links to external URLs. **Skip.** It's not a critical flow.
-- `app/login/page.tsx` — sync Server Component composing `<BrandLogo>`, `<Input>`, `<Button>`, `<AuthFooter>`. **Playwright** when the auth flow lands. The form's controlled state will eventually be a client child — when that exists, unit-test it (`artifacts/client-components.md`); the page itself stays Playwright-only.
+- `app/login/page.tsx` — sync Server Component composing `<BrandLogo>`, `<TextField>`, `<FormLabel>`, `<Button>`, `<AuthFooter>`. **Playwright** when the auth flow lands. The form's controlled state will eventually be a client child — when that exists, unit-test it (`artifacts/client-components.md`); the page itself stays Playwright-only.
 - Future `app/<route>/page.tsx` with `async function Page()` → **Playwright only**, never Vitest (see `../references/gotchas.md`).

@@ -2,7 +2,7 @@
 
 # Icon Components (`components/icons/*.tsx`)
 
-Icon components render an inline `<svg>` with hardcoded paths, `viewBox` from the source SVG, `currentColor` fills, `aria-hidden="true"`, and `...props` spread onto the root. They do not branch, do not hold state, do not handle events.
+Icon components render an inline `<svg>` with hardcoded paths, `viewBox` from the source SVG, `currentColor` fills, `aria-hidden="true"`, and `...props` spread onto the root. They do not branch, do not hold state, do not handle events. They are hand-maintained and re-exported from `components/icons/index.ts` — there is no external icon library (`lucide-react` was deliberately removed), so nothing here is third-party code.
 
 ## What to test
 
@@ -24,7 +24,7 @@ Always.
 
 ## Examples from this project
 
-- `components/icons/streamtube-icon.tsx` — renders a `<svg>` with a single `<path>`. **Skip.** Consumers like `<BrandLogo>` are exercised via Playwright on the rendered `/login` page.
+- `components/icons/spinner.tsx` — renders a `<svg>` with static paths, re-exported from `components/icons/index.ts`. **Skip.** Its consumers (loading states on buttons and forms) are exercised via Playwright on the rendered page.
 
 ## If you want to verify icons visually
 

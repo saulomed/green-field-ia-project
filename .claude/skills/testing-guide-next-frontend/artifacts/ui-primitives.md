@@ -13,7 +13,7 @@ They contain no business logic, no state, no side effects.
 
 ## What to test
 
-Nothing at the primitive level. The behavior of `cva` and Radix is covered by their own test suites; testing it here would duplicate that coverage. Visual correctness of variants is a design concern, validated against Figma during implementation (`figma-implement-design` skill).
+Nothing at the primitive level. The behavior of `cva` and Radix is covered by their own test suites; testing it here would duplicate that coverage. Visual correctness of variants is a design concern: the contract lives in `.claude/rules/frontend-design-system.md` (Figma file **FC-Tube** is the source of truth) and is validated during implementation, not by tests.
 
 ## Layer assignment
 
@@ -33,7 +33,10 @@ Always for stock shadcn primitives.
 ## Examples from this project
 
 - `components/ui/button.tsx` — `cva` variants + `Slot` passthrough. **Skip.** Coverage comes from every page/component that renders a button.
-- `components/ui/card.tsx`, `input.tsx`, `label.tsx` — same. **Skip.**
+
+- `components/ui/text-field.tsx`, `form-label.tsx` — same. **Skip.**
+
+> Note: these primitives are **reconciled with Figma**, not stock shadcn output. That reconciliation is a design-system concern (`.claude/rules/frontend-design-system.md`), not a testing one — an unreconciled primitive is a defect caught in review, not by a Vitest assertion.
 
 ## Important rule
 

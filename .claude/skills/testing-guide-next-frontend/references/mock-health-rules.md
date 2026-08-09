@@ -26,7 +26,7 @@ For `next-frontend`, the boundaries are:
 | `next/font` | Generated `className` is part of the rendered tree. |
 | `cn(...)` from `@/lib/utils` | Configured-library function. Mocking it hides class merging bugs. |
 | `cva` / `class-variance-authority` | Same — configured library. |
-| shadcn primitives (`<Button>`, `<Card>`, `<Input>`, `<Label>`) | Owned UI; rendering them inside a feature/page test proves the composition works. |
+| shadcn primitives (`<Button>`, `<TextField>`, `<FormLabel>`) | Owned UI, reconciled with Figma; rendering them inside a feature/page test proves the composition works. |
 | Icons from `@/components/icons/*` | Pure SVG components; render them as-is. |
 | `@/lib/utils`'s `extendTailwindMerge` config | Configured-library data; not behavior to mock. |
 

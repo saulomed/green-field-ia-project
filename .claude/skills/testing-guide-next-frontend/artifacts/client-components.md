@@ -21,7 +21,7 @@ Client components are the only React components Vitest can render meaningfully �
 
 ## Setup pattern
 
-`components/<feature>/__tests__/<name>.test.tsx`:
+`components/__tests__/<name>.test.tsx`:
 
 ```tsx
 import { describe, it, expect, vi, beforeEach } from "vitest"
@@ -37,7 +37,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }))
 
-import { LoginForm } from "@/components/auth/login-form"
+import { LoginForm } from "@/components/login-form"
 
 describe("<LoginForm>", () => {
   beforeEach(() => pushMock.mockClear())
@@ -54,8 +54,13 @@ describe("<LoginForm>", () => {
 
   it("submits and navigates to / on success", async () => {
     // MSW is already configured in vitest setupFiles (see mocks/server.ts).
-    // Override the default handler for this test if needed:
-    //   server.use(http.post(`${API_URL}/auth/login`, () => HttpResponse.json({ token: "x" })))
+    // A client component calls the BFF route handler, not NestJS directly —
+    // intercept the relative BFF path. Override the default handler if needed:
+    //   server.use(http.post("/api/auth/login", () => HttpResponse.json({ ok: true })))
+    //
+    // Never return a token in the JSON body: per CLAUDE.md § API Integration
+    // (auth/TD-03) the token travels in an httpOnly cookie the browser never reads.
+    // A fixture that hands a token to JavaScript teaches the forbidden pattern.
     render(<LoginForm />)
     await userEvent.type(
       screen.getByLabelText(/email address/i),
@@ -70,7 +75,7 @@ describe("<LoginForm>", () => {
 
 ## Anti-pattern reminders
 
-- Do **not** mock `<Button>`, `<Input>`, `<Card>` — those are configured-library primitives that compose into the component under test. Render them.
+- Do **not** mock `<Button>`, `<TextField>`, `<FormLabel>` — those are configured-library primitives that compose into the component under test. Render them.
 - Do **not** mock `cn()` from `@/lib/utils` or `next/image` / `next/link`. They have real Node implementations and the test should exercise them.
 - Do **not** assert Tailwind class strings. Assert role + name + `aria-*` + visible text.
 

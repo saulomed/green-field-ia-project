@@ -48,7 +48,7 @@ These principles connect the universal layered-testing model to the Next.js 16 /
 
 ### NOT worth testing
 
-- **Pure shadcn UI primitives** (`components/ui/button.tsx`, `card.tsx`, `input.tsx`, `label.tsx`) — they are thin wrappers that compose `cva` variants and forward props. Tested transitively via the feature components and pages that use them. Exception: if a primitive grows real branching (e.g., a future `<DataTable>` with sort/pagination state), test the branching only.
+- **Pure shadcn UI primitives** (`components/ui/button.tsx`, `text-field.tsx`, `form-label.tsx`) — they are thin wrappers that compose `cva` variants and forward props. Tested transitively via the feature components and pages that use them. Exception: if a primitive grows real branching (e.g., a future `<DataTable>` with sort/pagination state), test the branching only.
 - **Icon components in `components/icons/`** — they render static `<svg>` markup with `currentColor`. Mirror test, no behavior. Skip.
 - **`lib/utils.ts` `cn()` passthrough** — it forwards to `clsx`+`tailwind-merge`. Trust the libraries. Re-test only if the `extendTailwindMerge` config grows non-trivial groups.
 - **Static / synchronous pages** with no interaction (e.g., the current `app/page.tsx`) — render is framework behavior. If the page is async (server fetch) or has interactive children, the test belongs in Playwright or in the child client component, not the page.
@@ -77,7 +77,7 @@ When implementing a feature, walk this checklist. For each artifact created or m
 | **Server action** | `*.integration.test.ts` with MSW; E2E for the submit flow | `artifacts/future-types.md` |
 | **Middleware / error / loading / not-found / metadata** | See guide — depends on type | `artifacts/future-types.md` |
 
-**How to use:** after implementing, walk every row. If a row doesn't apply (you didn't create that artifact type), skip it. Before declaring the task done, run `npm test`, `npm run test:e2e`, `npx tsc --noEmit`, and `npm run lint` — see global `CLAUDE.md` → "Definition of Done (Technical)".
+**How to use:** after implementing, walk every row. If a row doesn't apply (you didn't create that artifact type), skip it. Before declaring the task done, run — inside the container, from the repository root — `npm test`, `npm run test:e2e`, `npx tsc --noEmit`, `npm run lint`, and, when `app/globals.css` or any `components/ui/*` primitive changed, `npm run check:tokens`. The command list and the reasoning behind each live in `next-frontend/CLAUDE.md` § Commands and § Design System.
 
 ## 4. Artifact Type Testing Guide
 
@@ -88,7 +88,7 @@ When creating or modifying an artifact, read the corresponding guide for the com
 | Pages | `app/**/page.tsx` | E2E for async; skip for static; client-child unit | `artifacts/pages.md` |
 | Layouts | `app/**/layout.tsx` | E2E only (when it has logic) | `artifacts/layouts.md` |
 | Client components | files with `"use client"` directive | Vitest unit (`*.test.ts`) | `artifacts/client-components.md` |
-| Feature components | `components/<feature>/*.tsx` (server, no logic) | Skip — covered via consumers | `artifacts/feature-components.md` |
+| Feature components | `components/*.tsx` (flat, server, no logic) | Skip — covered via consumers | `artifacts/feature-components.md` |
 | shadcn UI primitives | `components/ui/*.tsx` | None | `artifacts/ui-primitives.md` |
 | Icons | `components/icons/*.tsx` | None | `artifacts/icons.md` |
 | Utilities | `lib/*.ts` | Vitest unit (when branching) | `artifacts/utilities.md` |
@@ -108,7 +108,9 @@ When creating or modifying an artifact, read the corresponding guide for the com
 - ❌ **Skip the `next/navigation` mock when rendering a client component that uses `useRouter`/`usePathname`/`useSearchParams`** — the hook throws outside the Next runtime. Mock once via `vi.mock("next/navigation", …)` per test file (`references/gotchas.md`).
 - ❌ **Run Playwright against `npm run dev`** — Playwright must drive `npm run build && npm run start` so behavior matches production (no React DevServer overlays, no debug logs). Configure `webServer` accordingly (`references/file-conventions.md`).
 - ❌ **Forget `server.listen()` / `server.resetHandlers()` / `server.close()`** in Vitest `setupFiles` — leaks handlers between tests and causes flakiness (`references/gotchas.md`).
-- ❌ **Hardcode the NestJS base URL inside tests** — read it from the same env var the BFF uses (`API_URL`) so MSW handlers and code stay in sync (`references/external-systems.md`).
+- ❌ **Hardcode the NestJS base URL inside tests** — read it from the same env var the BFF uses (`API_BASE_URL`) so MSW handlers and code stay in sync (`references/external-systems.md`).
+- ❌ **Return an auth token in a fixture's JSON body, or seed one into `localStorage`** — per `auth/TD-03` the token travels in an httpOnly cookie the browser never reads. Assert on `set-cookie`; such a fixture would only pass against an implementation that violates the decision (`references/external-systems.md`).
+- ❌ **Hand-write DTO interfaces in tests or `mocks/handlers.ts`** — `openapi-spec/TD-07` reserves that for generated types from `nestjs-project/openapi.json`. Until the codegen lands, use inline literals (`references/external-systems.md`).
 
 ## 6. E2E Terminology Note
 
@@ -136,4 +138,4 @@ When working on a feature:
 1. Use §3 (Feature Implementation Checklist) to identify which artifacts need tests.
 2. Read the corresponding `artifacts/*.md` for each — that file contains the setup template you should copy.
 3. Consult `references/` for cross-cutting topics (MSW, mocking, naming, gotchas).
-4. Before declaring done: run the full Vitest suite, full Playwright suite, `npx tsc --noEmit`, and `npm run lint` inside the container.
+4. Before declaring done: run the full Vitest suite, full Playwright suite, `npx tsc --noEmit`, and `npm run lint` inside the container — plus `npm run check:tokens` when `globals.css` or a `components/ui/*` primitive changed. Every `docker compose` command runs from the repository root.

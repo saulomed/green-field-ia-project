@@ -1,8 +1,8 @@
 > Part of the `testing-guide-next-frontend` skill (see `../SKILL.md`).
 
-# Feature Components (`components/<feature>/*.tsx`, server, no logic)
+# Feature Components (`components/*.tsx`, server, no logic)
 
-Feature components are presentational composites that live under `components/<feature>/` (e.g., `components/auth/brand-logo.tsx`). They take props, compose primitives, and render. They have no state, no handlers, no `fetch`, no async.
+Feature components are presentational composites that live **flat** under `components/` (e.g., `components/brand-logo.tsx`), per `next-frontend/CLAUDE.md` § Architecture — `components/ui/` and `components/icons/` are the only subfolders. They take props, compose primitives, and render. They have no state, no handlers, no `fetch`, no async.
 
 ## What to test
 
@@ -33,5 +33,5 @@ Always, with the rare exception above.
 
 ## Examples from this project
 
-- `components/auth/brand-logo.tsx` — selects `size-10` vs `size-8` and `text-h1` vs `text-h2` from a `size` prop. Pure presentational. **Skip.** Exercise it via Playwright on the rendered `/login` page.
-- `components/auth/auth-footer.tsx` — renders a question label and a `<Link>` from props. Pure passthrough. **Skip.** Exercise via Playwright (click the link, assert navigation).
+- `components/brand-logo.tsx` — renders the wordmark via `next/image` and picks typography from a `size` prop. Pure presentational. **Skip.** Exercise it via Playwright on the rendered `/login` page.
+- `components/auth-footer.tsx` — renders a question label and a `<Link>` from props. Pure passthrough. **Skip.** Exercise via Playwright (click the link, assert navigation).

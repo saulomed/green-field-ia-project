@@ -2,7 +2,7 @@
 
 # Custom Hooks (`hooks/*.ts`)
 
-Custom hooks encapsulate stateful logic shared across client components. The `hooks/` directory does not exist yet — it will be created the first time a hook is added (see `next-frontend/CLAUDE.md` → Path Aliases).
+Custom hooks encapsulate stateful logic shared across client components. The `hooks/` directory does not exist yet — it will be created the first time a hook is added (see `next-frontend/CLAUDE.md` § Architecture for the folder layout and the `@/*` path alias).
 
 ## What to test
 
@@ -35,12 +35,12 @@ import { http, HttpResponse } from "msw"
 import { server } from "@/mocks/server"
 import { useVideoUpload } from "@/hooks/use-video-upload"
 
-const API_URL = process.env.API_URL ?? "http://api.test"
+const API_BASE_URL = process.env.API_BASE_URL ?? "http://api.test"
 
 describe("useVideoUpload", () => {
   beforeEach(() => {
     server.use(
-      http.post(`${API_URL}/videos`, async () =>
+      http.post(`${API_BASE_URL}/videos`, async () =>
         HttpResponse.json({ id: "v1", status: "queued" })
       )
     )
@@ -60,7 +60,7 @@ describe("useVideoUpload", () => {
 
   it("transitions to error when the API returns 500", async () => {
     server.use(
-      http.post(`${API_URL}/videos`, () =>
+      http.post(`${API_BASE_URL}/videos`, () =>
         HttpResponse.json({ message: "boom" }, { status: 500 })
       )
     )

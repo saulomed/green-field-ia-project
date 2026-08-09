@@ -30,14 +30,13 @@ next-frontend/
 │       ├── route.ts
 │       └── __tests__/
 │           └── route.integration.test.ts
-├── components/
+├── components/                         # composed pieces live FLAT here, not in feature folders
+│   ├── <component>.tsx                #   e.g. brand-logo.tsx, auth-footer.tsx
 │   ├── ui/                            # shadcn primitives — no test files here
 │   ├── icons/                         # icons — no test files here
-│   └── <feature>/
-│       ├── <component>.tsx
-│       └── __tests__/
-│           ├── <component>.test.tsx                   # unit (client component)
-│           └── <component>.integration.test.tsx      # integration (with MSW), when applicable
+│   └── __tests__/
+│       ├── <component>.test.tsx                   # unit (client component)
+│       └── <component>.integration.test.tsx       # integration (with MSW), when applicable
 ├── lib/
 │   ├── utils.ts
 │   └── __tests__/
@@ -59,6 +58,8 @@ next-frontend/
 
 `components/ui/` and `components/icons/` deliberately have **no** `__tests__/` subfolder. If you find yourself wanting to add one, re-read `artifacts/ui-primitives.md` and `artifacts/icons.md` — these types do not earn unit tests.
 
+Do **not** invent `components/<feature>/` subfolders to host tests. `next-frontend/CLAUDE.md` § Architecture fixes the flat layout (`ui/` and `icons/` are the only subfolders), so a single `components/__tests__/` holds every component test.
+
 ## Scripts (to add to `package.json` during bootstrap)
 
 ```json
@@ -71,7 +72,7 @@ next-frontend/
 }
 ```
 
-All test commands run inside the container:
+All test commands run inside the container, and every `docker compose` invocation runs **from the repository root** — never from `next-frontend/`. Running Compose from the subdirectory creates a separate project on a separate network and `nestjs-api` stops resolving (`next-frontend/CLAUDE.md` § Development Environment).
 
 ```bash
 docker compose exec next-frontend npm test
@@ -89,6 +90,8 @@ docker compose exec next-frontend npm run test:e2e -- tests/login.e2e-spec.ts
 
 Playwright **must** drive `npm run build && npm run start`, not `npm run dev`. The dev server adds DevServer overlays, debug logs, and slower transitions that diverge from what users see.
 
+The app is served on **3001, not 3000** — `nestjs-api` owns 3000, and the port is pinned in the `dev`/`start` scripts (`next -p 3001`). `baseURL` and `webServer.url` must match it.
+
 ```ts
 import { defineConfig, devices } from "@playwright/test"
 
@@ -98,12 +101,12 @@ export default defineConfig({
   fullyParallel: true,
   retries: process.env.CI ? 2 : 0,
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3001",
     trace: "on-first-retry",
   },
   webServer: {
     command: "npm run build && npm run start",
-    url: "http://localhost:3000",
+    url: "http://localhost:3001",
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
   },

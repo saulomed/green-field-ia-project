@@ -61,7 +61,15 @@ npm run check:tokens                     # Guards the globals.css theming contra
 npx tsc --noEmit                         # Type-check (the build does not emit JS via tsc)
 ```
 
-There are **no `test` / `test:e2e` scripts yet** — see "Testing" below.
+Test commands — **the scripts do not exist yet**; these are the names bootstrap must create (see "Testing"):
+
+```bash
+npm test                                 # vitest run — unit + integration
+npm run test:watch                       # vitest — watch mode
+npm test -- lib/__tests__/foo.test.ts    # single Vitest file
+npm run test:e2e                         # playwright test
+npm run test:e2e -- tests/login.e2e-spec.ts   # single Playwright spec
+```
 
 ## Installing Dependencies Inside the Container
 
@@ -88,6 +96,9 @@ App Router. Everything under `app/` is a **Server Component by default**; `"use 
 - `components/icons/` — hand-maintained SVG components, re-exported from `index.ts`. **No external icon library** — `lucide-react` was deliberately removed.
 - `lib/utils.ts` — `cn()`, built with `extendTailwindMerge` so the Figma typography utilities are not mistaken for colors. Every new `--text-*` token must be registered there in the same change.
 - `scripts/` — repo tooling (`check-theme-tokens.mjs`).
+- `__tests__/` — Vitest suites, one folder per artifact folder, sitting next to the code under test (`app/api/login/__tests__/`, `lib/__tests__/`, …).
+- `mocks/` — MSW `handlers.ts` + `server.ts`, the fake NestJS API shared by every Vitest integration test.
+- `tests/` — Playwright suites only. The single exception to colocation: E2E has no single artifact to sit beside.
 
 Path alias: `@/*` resolves to the project root (`@/components/ui/button`, `@/lib/utils`).
 
@@ -113,10 +124,45 @@ The one thing worth repeating: run `npm run check:tokens` after any change to `g
 
 ## Testing
 
-The contract for this project (tooling is **not wired yet** — `vitest.config.ts`, `playwright.config.ts` and the `test` scripts do not exist):
+Tooling is **not wired yet** — `vitest.config.ts`, `vitest.setup.ts`, `playwright.config.ts`, `mocks/server.ts` and the `test` / `test:e2e` scripts do not exist. Everything below is the standing contract for *new* tests; bootstrap makes the commands runnable without changing a single rule.
 
-- **Vitest** — unit and integration tests (`*.test.ts`, `*.integration.test.ts`), colocated with the code.
-- **Playwright** — end-to-end tests (`*.e2e-spec.ts` under `tests/`).
-- **MSW (`msw/node`)** — the only fake for the NestJS API in integration tests. **No Vitest test may open a real network connection to `nestjs-api`**, and no test mocks global `fetch` directly.
+### Runner per layer
 
-Async Server Components cannot be rendered by Vitest — their behavior is proven in Playwright. See the `testing-guide-next-frontend` skill for what to test at which layer, per artifact type.
+| Layer | Runner | Suffix | Location |
+|---|---|---|---|
+| Unit — a component, hook or util in isolation | **Vitest** | `*.test.ts` / `*.test.tsx` | `__tests__/` next to the artifact |
+| Integration — artifacts wired together; route handlers called as functions against the MSW fake API | **Vitest** | `*.integration.test.ts` / `.tsx` | `__tests__/` next to the artifact |
+| End-to-end — real browser driving the running app | **Playwright** | `*.e2e-spec.ts` | `tests/` at the root of `next-frontend/` |
+
+**Placement rule:** unit and integration tests live in a `__tests__/` folder **beside the artifact they test** — never in a mirrored top-level tree. E2E is the only lane that lives apart, in `tests/`, because a browser flow crosses too many artifacts to belong next to any one of them.
+
+### BFF / route handlers — the decided approach
+
+Route handlers under `app/api/**/route.ts` are the BFF. They are tested as **integration tests in Vitest**, and never against the real NestJS API:
+
+- **Import and call the handler directly** — `import { POST } from "@/app/api/auth/login/route"`, build a `Request`/`NextRequest`, `await POST(req)`, assert on the returned `Response` (status, headers, parsed body). No HTTP server is started, no supertest layer exists for the Next.js app.
+- **The upstream NestJS API is faked by MSW** — a local fake built with `msw` handlers and `setupServer` from `msw/node`, defined in `mocks/handlers.ts` and `mocks/server.ts`. That fake is the *only* sanctioned stand-in for `nestjs-api`.
+- **No Vitest test may open a real network connection to `nestjs-api`** — configure `server.listen({ onUnhandledRequest: "error" })` so an unmocked request fails the test instead of leaking out.
+- **Never mock global `fetch`** with `vi.fn()`/`vi.mock`. A raw `fetch` mock accepts any URL, method or body and therefore hides exactly the wiring mistakes MSW would catch.
+- MSW handlers must read the upstream base URL from the same env var the handler uses (`API_BASE_URL`), never hardcode it — otherwise fake and code drift apart silently.
+
+Lifecycle goes in `vitest.setup.ts`, wired through `setupFiles` in `vitest.config.ts`:
+
+```ts
+import { afterAll, afterEach, beforeAll } from "vitest"
+import { server } from "./mocks/server"
+
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+afterEach(() => server.resetHandlers())
+afterAll(() => server.close())
+```
+
+Skipping `resetHandlers()` leaks per-test overrides into the next test — the most common source of flakiness in this lane.
+
+### Layer boundaries
+
+- **Async Server Components cannot be rendered by Vitest.** React 19 + Next.js 16 do not support rendering `async function Page()` under jsdom/happy-dom. Their behavior is proven in Playwright — do not invent jsdom workarounds. Synchronous Server Components and Client Components *are* unit-renderable.
+- **Vitest + MSW proves BFF logic; Playwright proves the app works against a running stack.** Neither substitutes the other: MSW validates that the handler transforms and shapes responses correctly, Playwright validates the wiring end to end.
+- **Playwright drives the production build** (`npm run build && npm run start` on port 3001), never `npm run dev` — the dev server adds overlays and timings that diverge from what users see.
+
+See the `testing-guide-next-frontend` skill for what to test at which layer, per artifact type, plus the setup templates.
