@@ -11,8 +11,10 @@ More info in the project overview: [docs/project-plan.md](docs/project-plan.md)
 This is a monorepo with two main areas:
 
 - `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express). Contains modules for users, channels, videos, comments, etc.
+- `next-frontend/` — Frontend app (Next.js 16, React 19, Tailwind v4, shadcn). App Router; design system mirrored from Figma.
 - `docs/` — Project documentation, architecture diagrams, and planning.
-- `nextjs-project/` (Next.js) — not yet initialized
+
+`compose.yaml` at the root is the single entrypoint for the environment: it `include`s `nestjs-project/compose.yaml` and adds `next-frontend`, so every service shares one Compose project and one network. Run `docker compose` from the root.
 
 ## Architecture (C4 Container Diagram)
 
@@ -36,6 +38,8 @@ Inside a container, `localhost` refers to the container itself, not the host mac
 - **Wrong:** `DB_HOST=localhost`
 
 This applies to all environment variables, configuration files, and code that references service hosts.
+
+**One exception: code that runs in the browser.** The user's browser runs on the host machine, outside the Compose network, so it cannot resolve service names — it must use the published port (`http://localhost:3000`). This is why the frontend carries two API base URLs: `API_BASE_URL` (server-side, service name) and `NEXT_PUBLIC_API_BASE_URL` (browser-side, `localhost`). See `next-frontend/CLAUDE.md` § API Integration.
 
 ## Working Principles
 

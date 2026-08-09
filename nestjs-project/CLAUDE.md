@@ -18,10 +18,12 @@ Only start the NestJS dev server (`npm run start:dev`) when the user **explicitl
 
 ## Development Environment
 
-This project runs inside Docker. Always use the container for development:
+This project runs inside Docker. Always use the container for development.
+
+**All `docker compose` commands run from the repository root**, not from `nestjs-project/`. The root `compose.yaml` `include`s this file so the API, the database, Mailpit and `next-frontend` share one Compose project and one network. Running Compose from inside `nestjs-project/` creates a separate project on a separate network, and the frontend can no longer reach `nestjs-api`.
 
 ```bash
-# Start containers
+# Start containers (from the repo root)
 docker compose up -d
 
 # Install dependencies (first time only)
@@ -34,6 +36,8 @@ docker compose exec nestjs-api npm run start:dev
 Services:
 - `nestjs-api` — NestJS API, port `3000`
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `mailpit` — SMTP `1025`, web UI `8025`
+- `next-frontend` — Next.js app, port `3001` (see `next-frontend/CLAUDE.md`)
 
 All verification and teardown commands run on the **host machine**:
 

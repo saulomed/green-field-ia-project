@@ -1,0 +1,26 @@
+# Root Compose file — the canonical entrypoint for the whole environment.
+#
+# `include` pulls the backend stack into THIS project, so every service shares
+# one default network: `next-frontend` can reach the API at `http://nestjs-api:3000`.
+# Running `docker compose up` from inside `nestjs-project/` instead would create a
+# separate project on a separate network, and that name would not resolve.
+#
+# Paths inside the included file stay relative to `nestjs-project/`, so the
+# backend Compose file needs no changes.
+include:
+  - nestjs-project/compose.yaml
+
+services:
+  next-frontend:
+    build:
+      context: ./next-frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - 3001:3001
+    volumes:
+      - ./next-frontend:/home/node/app
+    env_file:
+      - path: ./next-frontend/.env
+        required: false
+    depends_on:
+      - nestjs-api
