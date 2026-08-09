@@ -63,15 +63,6 @@ async createChannel(dto: CreateChannelDto): Promise<Channel> {
 - Throw domain exceptions (custom `Error` subclasses) — never throw NestJS HTTP exceptions (`NotFoundException`, `ConflictException`, etc.) from services. Services must not be aware of the transport layer. Exception filters are responsible for mapping domain exceptions to HTTP responses
 - Logging inside a catch is fine, but logging is not a substitute for throwing
 
-### Unique constraints are the real arbiter of uniqueness — catch `23505`
-
-A pre-insert `exists`/`findOne` check does **not** close the race: under READ COMMITTED it takes no row lock, so two concurrent transactions both read `false`, both insert, and the DB's unique index is the only thing that actually rejects the duplicate. If you rely solely on the pre-check, the loser of the race gets an untreated `QueryFailedError` (`code === '23505'`) → **500 instead of 409**.
-
-So, for any insert guarded by uniqueness (email, nickname, slug):
-
-- A pre-check is still useful as **fail-fast** (skip expensive work like argon2 hashing before opening a transaction), but it is not the guarantee.
-- The `catch` around the insert MUST map `error.code === '23505'` to the appropriate domain exception (e.g. `EmailAlreadyExistsException`) and re-throw. Unknown errors still propagate as-is (see the "catch, enrich, re-throw" example above).
-
 ### Background tasks, event handlers e cron jobs
 
 - In these contexts, rethrowing would crash the process. `catch` blocks should log the error and optionally queue for retry or send to a dead letter queue

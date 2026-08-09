@@ -20,8 +20,7 @@ description: 'TypeORM entity conventions for database models'
 
 ## Relationships
 
-- Define the inverse side of a relationship **only when it is actually loaded and used**. Do **not** declare a bidirectional relation "for symmetry" if nothing ever populates the inverse side. A relation declared but never loaded — and typed as non-optional (`channel: Channel`) — is a runtime trap: `user.channel.nickname` passes the type-check and throws at runtime. If a side is only sometimes loaded, type it optional (`channel?: Channel`) so callers are forced to null-check. If it is never loaded, keep the relation unidirectional (the owning side / FK is enough).
-- The owning side holds the FK; a unidirectional `@ManyToOne` on the owning side needs no `@OneToMany` on the other end unless you query from that end.
+- Always define both sides of a relationship (e.g., `@OneToMany` + `@ManyToOne`)
 - Prefer explicit relation loading (`relations: [...]`) — load only what each query needs
 - Use eager loading only for low-cardinality, always-needed relations (e.g., `user.role`)
 - Use lazy loading only when the relation is rarely accessed and the `Promise<>` type is acceptable
