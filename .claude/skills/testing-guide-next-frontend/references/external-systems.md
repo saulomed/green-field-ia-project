@@ -35,11 +35,10 @@ export const server = setupServer(...handlers)
 
 ```ts
 import { http, HttpResponse } from "msw"
-
-const API_BASE_URL = process.env.API_BASE_URL ?? "http://api.test"
+import { config } from "@/lib/env"
 
 export const handlers = [
-  http.post(`${API_BASE_URL}/auth/login`, () =>
+  http.post(`${config.api.baseUrl}/auth/login`, () =>
     HttpResponse.json({ accessToken: "test-token" })
   ),
   // Add one entry per NestJS endpoint touched by the BFF
@@ -83,20 +82,28 @@ afterAll(() => server.close())
 
 ## API_BASE_URL — single source of truth
 
-Tests must read the NestJS base URL from the same env var the BFF uses. Per `next-frontend/CLAUDE.md` § "API Integration" there are two, and MSW fixtures follow **`API_BASE_URL`** (`http://nestjs-api:3000`) because route handlers and Server Components are server-side code. `NEXT_PUBLIC_API_BASE_URL` (`http://localhost:3000`) is the browser-side counterpart — use it only in tests that exercise a client component's own `fetch`. Hardcoding either value inside fixtures creates drift:
+There is exactly **one** NestJS base URL, and it is server-side only: `API_BASE_URL`. Per `next-frontend-env-config/TD-04` the browser never calls the API directly — it calls relative routes (`/api/...`) on the Next route handlers, which are the only code that dereferences `API_BASE_URL`. So MSW fixtures always intercept `API_BASE_URL`; there is no browser-side counterpart to mock. A client component's own `fetch` targets a relative path and never reaches MSW's NestJS handlers at all.
+
+Fixtures must read the value from the same module the BFF reads it from — `config.api.baseUrl` in `@/lib/env` — never from `process.env` directly and never hardcoded:
 
 ```ts
+import { config } from "@/lib/env"
+
 // ✅
-const API_BASE_URL = process.env.API_BASE_URL ?? "http://api.test"
-http.post(`${API_BASE_URL}/auth/login`, …)
+http.post(`${config.api.baseUrl}/auth/login`, …)
 
 // ❌ hardcoded — diverges from production wiring
 http.post("http://localhost:3000/auth/login", …)
+
+// ❌ bypasses the validated module — `lib/env.ts` is the only place that reads process.env
+const API_BASE_URL = process.env.API_BASE_URL ?? "http://api.test"
 ```
 
-Set `API_BASE_URL` in `vitest.config.ts`'s `test.env` or in a `.env.test` file once.
+**Only Node-environment tests may import `@/lib/env`.** `API_BASE_URL` is a server-only key, and t3-env decides server vs client by `typeof window === "undefined"`. Under jsdom the boundary guard fires and the import throws at module evaluation. So `config.api.baseUrl` belongs in route-handler tests (which run in `environment: "node"`); client components and hooks intercept the **relative** BFF path instead (`http.post("/api/videos", …)`) — which is what they actually call, per `next-frontend-env-config/TD-04`.
 
-## Typing the fixtures — `openapi-spec/TD-07`
+`API_BASE_URL` is set once, for the whole suite, in the versioned `next-frontend/.env.test` (`http://nestjs-api.test:3000` — a host that deliberately does not resolve, so anything escaping MSW fails loudly instead of leaking to the real service). It is loaded by `loadEnvConfig(process.cwd())` from `@next/env` at the top of `vitest.config.ts`. Do **not** duplicate the value in `vitest.config.ts`'s `test.env`.
+
+## Typing the fixtures — `openapi-spec/TD-05`
 
 The NestJS contract is published as `nestjs-project/openapi.json`, and the decided client strategy is `openapi-typescript` (types) + `openapi-fetch` (client). **Adoption is deferred** — neither library is installed yet (`next-frontend/CLAUDE.md` § API Integration).
 

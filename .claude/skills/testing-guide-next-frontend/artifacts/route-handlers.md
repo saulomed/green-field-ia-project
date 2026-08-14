@@ -39,14 +39,13 @@ This is the artifact type with the strongest testing contract in `next-frontend/
 import { describe, it, expect, beforeEach } from "vitest"
 import { http, HttpResponse } from "msw"
 import { server } from "@/mocks/server"
+import { config } from "@/lib/env"
 import { POST } from "@/app/api/auth/login/route"
-
-const API_BASE_URL = process.env.API_BASE_URL ?? "http://api.test"
 
 describe("POST /api/auth/login", () => {
   it("forwards credentials to NestJS and returns 200 + token cookie", async () => {
     server.use(
-      http.post(`${API_BASE_URL}/auth/login`, async ({ request }) => {
+      http.post(`${config.api.baseUrl}/auth/login`, async ({ request }) => {
         const body = await request.json()
         expect(body).toEqual({ email: "u@e.com", password: "hunter2" })
         return HttpResponse.json({ accessToken: "jwt-xyz" })
@@ -67,7 +66,7 @@ describe("POST /api/auth/login", () => {
 
   it("returns 401 when NestJS rejects the credentials", async () => {
     server.use(
-      http.post(`${API_BASE_URL}/auth/login`, () =>
+      http.post(`${config.api.baseUrl}/auth/login`, () =>
         HttpResponse.json({ message: "Invalid credentials" }, { status: 401 })
       )
     )
@@ -83,7 +82,7 @@ describe("POST /api/auth/login", () => {
   it("returns 400 on an empty body without calling NestJS", async () => {
     let called = false
     server.use(
-      http.post(`${API_BASE_URL}/auth/login`, () => {
+      http.post(`${config.api.baseUrl}/auth/login`, () => {
         called = true
         return HttpResponse.json({}, { status: 200 })
       })
@@ -114,6 +113,6 @@ When a handler has pure transformation logic worth covering in isolation, factor
 
 ## Cross-references
 
-- `../references/external-systems.md` — how MSW intercepts NestJS calls, where `API_BASE_URL` comes from.
+- `../references/external-systems.md` — how MSW intercepts NestJS calls, and why fixtures read `config.api.baseUrl` from `@/lib/env` rather than `process.env`.
 - `../references/file-conventions.md` — Vitest config: `setupFiles`, `environment`, MSW server lifecycle.
 - `../references/gotchas.md` — common BFF testing mistakes (missing handlers throw, request body parsing, `set-cookie` assertions).

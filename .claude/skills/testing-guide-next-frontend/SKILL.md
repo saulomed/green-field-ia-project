@@ -108,9 +108,9 @@ When creating or modifying an artifact, read the corresponding guide for the com
 - ❌ **Skip the `next/navigation` mock when rendering a client component that uses `useRouter`/`usePathname`/`useSearchParams`** — the hook throws outside the Next runtime. Mock once via `vi.mock("next/navigation", …)` per test file (`references/gotchas.md`).
 - ❌ **Run Playwright against `npm run dev`** — Playwright must drive `npm run build && npm run start` so behavior matches production (no React DevServer overlays, no debug logs). Configure `webServer` accordingly (`references/file-conventions.md`).
 - ❌ **Forget `server.listen()` / `server.resetHandlers()` / `server.close()`** in Vitest `setupFiles` — leaks handlers between tests and causes flakiness (`references/gotchas.md`).
-- ❌ **Hardcode the NestJS base URL inside tests** — read it from the same env var the BFF uses (`API_BASE_URL`) so MSW handlers and code stay in sync (`references/external-systems.md`).
+- ❌ **Hardcode the NestJS base URL inside tests, or read `process.env.API_BASE_URL` directly** — Node-environment tests use `config.api.baseUrl` from `@/lib/env`; browser-environment tests intercept the relative BFF path instead (`references/external-systems.md` § "API_BASE_URL — single source of truth").
 - ❌ **Return an auth token in a fixture's JSON body, or seed one into `localStorage`** — per `auth/TD-03` the token travels in an httpOnly cookie the browser never reads. Assert on `set-cookie`; such a fixture would only pass against an implementation that violates the decision (`references/external-systems.md`).
-- ❌ **Hand-write DTO interfaces in tests or `mocks/handlers.ts`** — `openapi-spec/TD-07` reserves that for generated types from `nestjs-project/openapi.json`. Until the codegen lands, use inline literals (`references/external-systems.md`).
+- ❌ **Hand-write DTO interfaces in tests or `mocks/handlers.ts`** — `openapi-spec/TD-05` reserves that for generated types from `nestjs-project/openapi.json`. Until the codegen lands, use inline literals (`references/external-systems.md`).
 
 ## 6. E2E Terminology Note
 

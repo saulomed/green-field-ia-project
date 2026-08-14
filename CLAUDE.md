@@ -39,7 +39,7 @@ Inside a container, `localhost` refers to the container itself, not the host mac
 
 This applies to all environment variables, configuration files, and code that references service hosts.
 
-**One exception: code that runs in the browser.** The user's browser runs on the host machine, outside the Compose network, so it cannot resolve service names — it must use the published port (`http://localhost:3000`). This is why the frontend carries two API base URLs: `API_BASE_URL` (server-side, service name) and `NEXT_PUBLIC_API_BASE_URL` (browser-side, `localhost`). See `next-frontend/CLAUDE.md` § API Integration.
+**The browser is outside the Compose network** — it runs on the host and cannot resolve service names. This does **not** buy the frontend an exception to the rule above: per `next-frontend-env-config/TD-04` the browser calls only relative `/api/...` routes, which the Next route handlers serve from inside the container. See `next-frontend/CLAUDE.md` § API Integration for the rationale and the deferred cases.
 
 ## Working Principles
 

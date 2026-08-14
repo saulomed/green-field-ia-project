@@ -35,12 +35,16 @@ import { http, HttpResponse } from "msw"
 import { server } from "@/mocks/server"
 import { useVideoUpload } from "@/hooks/use-video-upload"
 
-const API_BASE_URL = process.env.API_BASE_URL ?? "http://api.test"
+// A hook runs in the browser, so it calls the BFF on a relative path — never
+// `config.api.baseUrl` (per next-frontend-env-config/TD-04). Two reasons not to
+// import `@/lib/env` here: it would teach the wrong wiring, and `API_BASE_URL`
+// is a server-only key — reading it under jsdom (`typeof window !== "undefined"`)
+// trips the t3-env boundary guard and throws at module evaluation.
 
 describe("useVideoUpload", () => {
   beforeEach(() => {
     server.use(
-      http.post(`${API_BASE_URL}/videos`, async () =>
+      http.post("/api/videos", async () =>
         HttpResponse.json({ id: "v1", status: "queued" })
       )
     )
@@ -60,7 +64,7 @@ describe("useVideoUpload", () => {
 
   it("transitions to error when the API returns 500", async () => {
     server.use(
-      http.post(`${API_BASE_URL}/videos`, () =>
+      http.post("/api/videos", () =>
         HttpResponse.json({ message: "boom" }, { status: 500 })
       )
     )
