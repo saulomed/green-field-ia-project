@@ -56,6 +56,11 @@ Restrições herdadas (não reabrir):
 
 **Libraries:** @nestjs/config
 
+**Revisions:**
+
+- 2026-08-10 — A decisão passa a ter duas metades com alcances distintos: o **mecanismo** (`registerAs` + `ConfigType`) fica restrito ao `nestjs-project/`; o **princípio** ("sem magic strings e sem `process.env` no código da aplicação, concentrado num loader único") é promovido a transversal do monorepo.
+  **Rationale:** `registerAs` e `ConfigType` são API de `@nestjs/config` e não existem no Next.js, mas o TD era herdado literalmente como convenção pelo `next-frontend/`, gerando um conflito (`ICC-2` em `docs/tasks/task-next-frontend-env-config/validation.md`) contra `next-frontend-env-config/TD-01`, que adotou `@t3-oss/env-nextjs` + `createEnv`. A adoção honra integralmente o princípio — toda leitura de `process.env` fica num módulo único, validado na importação — e diverge apenas na API, que é intransportável entre as stacks. Completa a delimitação que a Revision de 2026-08-09 em TD-02 iniciou.
+
 ---
 
 ## TD-02: Organização das variáveis (namespacing por domínio)
@@ -83,6 +88,11 @@ Restrições herdadas (não reabrir):
 **Decision:** Option B — namespaces por domínio (`app`, `database`, `mail`) em `src/config/`.
 
 **Libraries:** @nestjs/config
+
+**Revisions:**
+
+- 2026-08-09 — O namespacing por domínio passa a reger também o `next-frontend/`, que ganha base própria de configuração de ambiente.
+  **Rationale:** o TD-02 nasceu com `**Scope:** Backend` porque `auth/TD-09` adiara o frontend; com o Next.js entrando em escopo, o princípio de "um arquivo de config por domínio, sem leitura direta de `process.env` fora do loader" é reafirmado como transversal ao monorepo. A **mecânica** permanece específica de cada stack: `registerAs` + `ConfigModule.forRoot({ load })` continua exclusivo do `nestjs-project/`; o equivalente no `next-frontend/` (biblioteca de validação, separação server/client das variáveis, cisão `API_BASE_URL` vs `NEXT_PUBLIC_API_BASE_URL`) não é decidido aqui e requer TD próprio.
 
 ---
 
@@ -116,6 +126,11 @@ Restrições herdadas (não reabrir):
 **Decision:** Option A — manter Joi (`validationSchema`).
 
 **Libraries:** joi
+
+**Revisions:**
+
+- 2026-08-10 — A escolha de **Joi** fica delimitada ao `nestjs-project/`. O que rege o monorepo é o **comportamento** — validação de schema no boot, com variável obrigatória ausente derrubando a aplicação —, não a biblioteca que o implementa.
+  **Rationale:** o TD era herdado literalmente como convenção pelo `next-frontend/`, gerando um conflito (`ICC-1` em `docs/tasks/task-next-frontend-env-config/validation.md`) contra `next-frontend-env-config/TD-02`, que adotou Zod v4. Joi é dependência de `nestjs-project/` e não se transporta: não implementa Standard Schema (logo não compõe com o `createEnv` de `next-frontend-env-config/TD-01`), não deriva tipos TypeScript do schema, e não é tree-shakeable no browser — o que a inviabiliza para a validação de formulários que o frontend terá. O comportamento exigido é preservado: `createEnv` valida na importação do módulo, derrubando o processo antes do primeiro request.
 
 ---
 

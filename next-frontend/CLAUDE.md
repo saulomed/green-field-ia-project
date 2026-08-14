@@ -78,9 +78,16 @@ npm run test:e2e -- tests/login.e2e-spec.ts   # single Playwright spec
 **Canonical procedure (requires the user's explicit authorization before running anything as root):**
 
 1. Install once as root: `docker compose exec -u root next-frontend npm install <pkg>`
-2. **Immediately** restore ownership: `docker compose exec -u root next-frontend chown -R node:node node_modules .next`
+2. **Immediately** restore ownership: `docker compose exec -u root next-frontend chown -R node:node node_modules .next tsconfig.tsbuildinfo next-env.d.ts`
 
-Do **not** leave `node_modules` or `.next` owned by root, and do **not** `chmod 777` as a permanent fix. Always ask the user before the root step; never run it silently.
+Do **not** leave these paths owned by root, and do **not** `chmod 777` as a permanent fix. Always ask the user before the root step; never run it silently.
+
+**Why `tsconfig.tsbuildinfo` and `next-env.d.ts` are on that list.** Both are generated files that live on the bind mount and are frequently created by tooling running on the **host** (uid 1001), which leaves them unwritable by the container's `node` user (uid 1000). They are not touched by `npm install`, so they drift out of sync with the two directories above. The symptoms are routine commands failing for reasons that look unrelated to permissions:
+
+- `npx tsc --noEmit` → `error TS5033: Could not write file '/home/node/app/tsconfig.tsbuildinfo': EACCES`
+- `npm run build` → `EACCES: permission denied, open '/home/node/app/next-env.d.ts'`, followed by `Next.js build worker exited with code: 1`
+
+If either appears, re-run the `chown` from step 2 — it is idempotent and safe to run on its own, without a preceding install.
 
 ## Long-running Processes
 
@@ -106,15 +113,17 @@ Path alias: `@/*` resolves to the project root (`@/components/ui/button`, `@/lib
 
 ## API Integration
 
-The root `CLAUDE.md` says to always use the Docker Compose service name as the host. That rule holds for **server-side** code only. The browser runs on the host machine and cannot resolve Compose service names, so client-side code must use the published port. Hence two variables (`.env.example`):
+**A única base URL da API é server-side.** Per `next-frontend-env-config/TD-04`, o browser nunca fala com o `nestjs-api` diretamente: ele chama apenas rotas relativas (`/api/...`) dos route handlers do próprio Next, que rodam dentro do container e resolvem o host pelo nome de serviço do Compose. Isso mantém a regra do `CLAUDE.md` raiz intacta e dispensa a exceção do browser — não existe variável `NEXT_PUBLIC_*` de base URL.
 
-- `API_BASE_URL=http://nestjs-api:3000` — Server Components, route handlers, server actions
-- `NEXT_PUBLIC_API_BASE_URL=http://localhost:3000` — anything reaching `fetch` from the browser
+- `API_BASE_URL=http://nestjs-api:3000` (`.env.example`) — Server Components, route handlers, server actions. Lida em runtime pelo processo Node, nunca embutida no bundle.
+- Código de browser → `fetch('/api/...')`, sempre relativo, sempre passando pelo BFF.
+
+Streaming e download de vídeo (Fases 03 e 05) ficam **fora** desta decisão: quando o object storage entrar em escopo, a URL pública desses assets exigirá decisão própria.
 
 Contracts already fixed in `docs/decisions/`, to be honored when the screens land:
 
 - **Auth token transport** (`auth/TD-03`): the API issues the token in an `httpOnly` + `Secure` + `SameSite` cookie. The frontend never reads it from JavaScript and never stores it in `localStorage`.
-- **Typed API client** (`openapi-spec/TD-07`): `openapi-typescript` (types) + `openapi-fetch` (client), derived from `nestjs-project/openapi.json`. **Strategy decided, adoption deferred** — neither library is installed yet. Do not hand-write DTO interfaces to work around it; adopting the codegen is the sanctioned path.
+- **Typed API client** (`openapi-spec/TD-05`): `openapi-typescript` (types) + `openapi-fetch` (client), derived from `nestjs-project/openapi.json`. **Strategy decided, adoption deferred** — neither library is installed yet. Do not hand-write DTO interfaces to work around it; adopting the codegen is the sanctioned path.
 
 ## Design System
 
@@ -144,7 +153,7 @@ Route handlers under `app/api/**/route.ts` are the BFF. They are tested as **int
 - **The upstream NestJS API is faked by MSW** — a local fake built with `msw` handlers and `setupServer` from `msw/node`, defined in `mocks/handlers.ts` and `mocks/server.ts`. That fake is the *only* sanctioned stand-in for `nestjs-api`.
 - **No Vitest test may open a real network connection to `nestjs-api`** — configure `server.listen({ onUnhandledRequest: "error" })` so an unmocked request fails the test instead of leaking out.
 - **Never mock global `fetch`** with `vi.fn()`/`vi.mock`. A raw `fetch` mock accepts any URL, method or body and therefore hides exactly the wiring mistakes MSW would catch.
-- MSW handlers must read the upstream base URL from the same env var the handler uses (`API_BASE_URL`), never hardcode it — otherwise fake and code drift apart silently.
+- MSW handlers must read the upstream base URL from `config.api.baseUrl` (`@/lib/env`) — the same module the handler reads — never hardcoded and never from `process.env` directly, otherwise fake and code drift apart silently. See `.claude/skills/testing-guide-next-frontend/references/external-systems.md` § "API_BASE_URL — single source of truth" for the mechanics.
 
 Lifecycle goes in `vitest.setup.ts`, wired through `setupFiles` in `vitest.config.ts`:
 
