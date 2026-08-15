@@ -6,6 +6,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # CLAUDE.md
 
+# Figma File Structure & Keys
+
+**File key:** `btF0MZVd48p33ufSP08RrX` – use isto como `fileKey` para todas as chamadas do Figma MCP.
+
+**Frame map** (onde procurar por cada tipo de nó dentro do arquivo):
+- `Components Library` – componentes reutilizáveis (botões, campos de entrada, cards, caixas de diálogo, etc.)
+- `Versão componentes` – páginas completas da aplicação montadas a partir da biblioteca
+- `Typography` – escala tipográfica e estilos de texto
+- `Color Main` – tokens de cor
+- `Radius` – tokens de raio/arredondamento (representação visual)
+- `Material Icons` – biblioteca de ícones (Material Symbols); cada ícone é um componente.
+
 ## Environment Startup Verification
 
 **Default behavior:** starting the environment means starting **only infrastructure services** (database, mail, and the idle app containers) — **never** start the Next.js dev server unless the user explicitly asks to run/serve the project (e.g., "rode o projeto", "suba o front", "run the app").
