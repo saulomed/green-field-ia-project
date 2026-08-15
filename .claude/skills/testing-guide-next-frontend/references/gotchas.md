@@ -56,11 +56,14 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, /* … *
 
 **Cause**: missing `server.resetHandlers()` in `afterEach`.
 
-**Fix**: ensure `vitest.setup.ts` includes:
+**Fix**: ensure the lane's setup file (`vitest.setup.node.ts` / `vitest.setup.dom.ts`) includes:
 
 ```ts
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
-afterEach(() => server.resetHandlers())
+beforeAll(() => {
+  server.listen({ onUnhandledRequest: "error" })
+  server.resetHandlers(...handlers) // promotes the lane's list to the *initial* handlers
+})
+afterEach(() => server.resetHandlers(...handlers))
 afterAll(() => server.close())
 ```
 
@@ -90,25 +93,29 @@ return new HttpResponse(JSON.stringify({ ok: true }), {
 
 ## Vitest
 
-### `happy-dom` vs `jsdom`
+### DOM environment — `jsdom` is the decided one
 
-For Next.js 16, prefer `happy-dom` (the official Next.js Vitest guide and the 2026 ecosystem consensus). If you hit a missing-API error (rare — usually `IntersectionObserver` / `ResizeObserver`), polyfill via `vi.stubGlobal` in `vitest.setup.ts` rather than switching to `jsdom`.
+`next-frontend-msw-base/TD-02` picked **`jsdom`**, matching the official Next.js Vitest guide. Do not switch the environment per file via `// @vitest-environment` docblocks — lane selection is by path, through the two projects in `vitest.config.mts` (`TD-01`), and a stray docblock reintroduces exactly the divergence that decision closed. If you hit a missing-API error (usually `IntersectionObserver` / `ResizeObserver`), polyfill via `vi.stubGlobal` in the lane's setup file.
+
+**Pin the jsdom URL.** Its default is `http://localhost:3000`, which in this project is the **`nestjs-api`** port, not the app's. Relative BFF handlers resolve against that location, so `environmentOptions.jsdom.url` must be `http://localhost:3001`.
+
+**Node version trap.** `jsdom@30` declares `node ^22.22.2 || ^24.15.0 || >=26.0.0` — it excludes the 25.x line, which the container currently runs, and installing it emits `EBADENGINE`. `jsdom@29` still accepts `>=24.0.0`. Recheck this when the base image moves to an LTS.
 
 ### Path alias resolution
 
 **Symptom**: `Cannot find module '@/lib/utils'` in a test file.
 
-**Fix**: add the alias to `vitest.config.ts`:
+**Fix**: Vite 8 resolves `tsconfig.json` paths natively — no plugin, no duplicated alias map:
 
 ```ts
-resolve: { alias: { "@": path.resolve(__dirname, ".") } }
+resolve: { tsconfigPaths: true }
 ```
 
-This must mirror `tsconfig.json`'s `paths`.
+The official Next.js guide still prescribes the `vite-tsconfig-paths` plugin; Vite 8 warns when it is present. Do not also declare `resolve.alias` — duplicating the alias is how the two drift apart.
 
 ### Tailwind v4 CSS in tests
 
-Vitest does not need to process `globals.css` — set `test.css: false` in `vitest.config.ts`. The DOM tests assert on roles / accessible names / `data-*` attributes, not on computed styles, so CSS evaluation is unnecessary and slows tests down.
+Vitest does not need to process `globals.css` — set `test.css: false` in `vitest.config.mts`. The DOM tests assert on roles / accessible names / `data-*` attributes, not on computed styles, so CSS evaluation is unnecessary and slows tests down.
 
 ## Playwright
 

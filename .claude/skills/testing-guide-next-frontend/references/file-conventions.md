@@ -45,14 +45,16 @@ next-frontend/
 │   └── __tests__/
 │       └── <hook>.test.ts
 ├── mocks/
-│   ├── handlers.ts                    # MSW request handlers
-│   └── server.ts                      # setupServer(...handlers)
-├── tests/                              # Playwright suites only
+│   ├── handlers.ts                    # upstream NestJS — typed via openapi-msw
+│   ├── bff-handlers.ts                # relative /api/... routes — DOM lane only
+│   └── server.ts                      # setupServer() — composed per lane
+├── tests/                              # Playwright suites only (not bootstrapped yet)
 │   ├── auth.setup.ts                  # storageState producer (auth fixture)
 │   └── <feature>.e2e-spec.ts
-├── vitest.config.ts
-├── vitest.setup.ts
-├── playwright.config.ts
+├── vitest.config.mts                   # two projects: node + dom
+├── vitest.setup.node.ts
+├── vitest.setup.dom.ts
+├── playwright.config.ts                # not bootstrapped yet
 └── package.json
 ```
 
@@ -60,7 +62,9 @@ next-frontend/
 
 Do **not** invent `components/<feature>/` subfolders to host tests. `next-frontend/CLAUDE.md` § Architecture fixes the flat layout (`ui/` and `icons/` are the only subfolders), so a single `components/__tests__/` holds every component test.
 
-## Scripts (to add to `package.json` during bootstrap)
+## Scripts
+
+`test` and `test:watch` are wired. `test:e2e` is **not** — it lands with the Playwright bootstrap, which no task owns yet.
 
 ```json
 {
@@ -71,6 +75,8 @@ Do **not** invent `components/<feature>/` subfolders to host tests. `next-fronte
   }
 }
 ```
+
+Single project: `npx vitest run --project node` / `--project dom`. Note that the CLI's `--environment` flag does **not** override a project's declared `environment` — use the projects, not the flag.
 
 All test commands run inside the container, and every `docker compose` invocation runs **from the repository root** — never from `next-frontend/`. Running Compose from the subdirectory creates a separate project on a separate network and `nestjs-api` stops resolving (`next-frontend/CLAUDE.md` § Development Environment).
 

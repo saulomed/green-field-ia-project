@@ -73,15 +73,20 @@ npm run check:tokens                     # Guards the globals.css theming contra
 npx tsc --noEmit                         # Type-check (the build does not emit JS via tsc)
 ```
 
-Test commands — **the scripts do not exist yet**; these are the names bootstrap must create (see "Testing"):
+Test commands — the Vitest ones are wired; **`test:e2e` does not exist yet** and lands with the Playwright bootstrap (see "Testing"):
 
 ```bash
-npm test                                 # vitest run — unit + integration
+npm test                                 # vitest run — unit + integration, both lanes
 npm run test:watch                       # vitest — watch mode
 npm test -- lib/__tests__/foo.test.ts    # single Vitest file
-npm run test:e2e                         # playwright test
+npx vitest run --project node            # only the node lane (route handlers, lib/)
+npx vitest run --project dom             # only the jsdom lane (components, hooks)
+
+npm run test:e2e                         # playwright test — NOT wired yet
 npm run test:e2e -- tests/login.e2e-spec.ts   # single Playwright spec
 ```
+
+The CLI's `--environment` flag does **not** override a project's declared `environment` — pick the lane with `--project`, never with `--environment`.
 
 ## Installing Dependencies Inside the Container
 
@@ -177,7 +182,20 @@ The one thing worth repeating: run `npm run check:tokens` after any change to `g
 
 ## Testing
 
-Tooling is **not wired yet** — `vitest.config.ts`, `vitest.setup.ts`, `playwright.config.ts`, `mocks/server.ts` and the `test` / `test:e2e` scripts do not exist. Everything below is the standing contract for *new* tests; bootstrap makes the commands runnable without changing a single rule.
+The **Vitest + MSW half is wired** (task `next-frontend-msw-base`): `vitest.config.mts`, `vitest.setup.node.ts`, `vitest.setup.dom.ts`, `mocks/{server,handlers,bff-handlers}.ts`, and the `test` / `test:watch` scripts all exist. **Playwright is not** — `playwright.config.ts`, `tests/auth.setup.ts` and the `test:e2e` script still do not exist, and no task owns that bootstrap yet. The E2E rules below are the standing contract for when it lands.
+
+### Two execution lanes, selected by path
+
+Per `next-frontend-msw-base/TD-01` + `TD-02`, `vitest.config.mts` declares two projects and the file's location decides which one runs it:
+
+| Lane | Environment | Paths | MSW handlers |
+|---|---|---|---|
+| `node` | `node` | `app/api/**/__tests__/`, `lib/**/__tests__/` | `mocks/handlers.ts` (upstream NestJS) |
+| `dom` | `jsdom` (`url: http://localhost:3001`) | `components/**/__tests__/`, `hooks/**/__tests__/` | `mocks/bff-handlers.ts` (relative `/api/...`) |
+
+The split is load-bearing, not stylistic: `@/lib/env` throws under a DOM environment because `@t3-oss/env-core` decides server vs client by `typeof window === "undefined"`. Anything importing it — route handlers, `lib/` utilities, and `mocks/handlers.ts` itself — must run in `node`. Never select the environment with a `// @vitest-environment` docblock; the lane is the path.
+
+**The DOM lane deliberately does not register the upstream handlers.** It would throw (see above) and would be pointless anyway: per `next-frontend-env-config/TD-04`, browser code only ever calls relative routes.
 
 ### Runner per layer
 
@@ -194,19 +212,27 @@ Tooling is **not wired yet** — `vitest.config.ts`, `vitest.setup.ts`, `playwri
 Route handlers under `app/api/**/route.ts` are the BFF. They are tested as **integration tests in Vitest**, and never against the real NestJS API:
 
 - **Import and call the handler directly** — `import { POST } from "@/app/api/auth/login/route"`, build a `Request`/`NextRequest`, `await POST(req)`, assert on the returned `Response` (status, headers, parsed body). No HTTP server is started, no supertest layer exists for the Next.js app.
-- **The upstream NestJS API is faked by MSW** — a local fake built with `msw` handlers and `setupServer` from `msw/node`, defined in `mocks/handlers.ts` and `mocks/server.ts`. That fake is the *only* sanctioned stand-in for `nestjs-api`.
+- **The upstream NestJS API is faked by MSW** — a local fake defined in `mocks/handlers.ts`, registered through `mocks/server.ts`. That fake is the *only* sanctioned stand-in for `nestjs-api`.
+- **Those upstream handlers are typed from the contract, not hand-shaped** — `createOpenApiHttp<paths>()` from `openapi-msw`, with `paths` imported from `@/lib/api/contracts` (per `next-frontend-msw-base/TD-03`). Path, method, status and body are checked against `nestjs-project/openapi.json` at build time, so a backend contract change breaks the fixtures instead of silently passing. Never hand-write a DTO shape here. `http.untyped` is the escape hatch for anything genuinely outside the spec.
 - **No Vitest test may open a real network connection to `nestjs-api`** — configure `server.listen({ onUnhandledRequest: "error" })` so an unmocked request fails the test instead of leaking out.
 - **Never mock global `fetch`** with `vi.fn()`/`vi.mock`. A raw `fetch` mock accepts any URL, method or body and therefore hides exactly the wiring mistakes MSW would catch.
 - MSW handlers must read the upstream base URL from `config.api.baseUrl` (`@/lib/env`) — the same module the handler reads — never hardcoded and never from `process.env` directly, otherwise fake and code drift apart silently. See `.claude/skills/testing-guide-next-frontend/references/external-systems.md` § "API_BASE_URL — single source of truth" for the mechanics.
 
-Lifecycle goes in `vitest.setup.ts`, wired through `setupFiles` in `vitest.config.ts`:
+Lifecycle goes in the lane's setup file, wired through each project's `setupFiles` in `vitest.config.mts` — `vitest.setup.node.ts` for the `node` lane, `vitest.setup.dom.ts` for `dom`:
 
 ```ts
 import { afterAll, afterEach, beforeAll } from "vitest"
+import { handlers } from "./mocks/handlers"
 import { server } from "./mocks/server"
 
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
-afterEach(() => server.resetHandlers())
+beforeAll(() => {
+  server.listen({ onUnhandledRequest: "error" })
+  // `mocks/server.ts` starts empty on purpose (TD-04 — composition is per lane). Passing the list
+  // here promotes it to the *initial* handlers; without it the first test of each file would run
+  // before the first afterEach, with none registered.
+  server.resetHandlers(...handlers)
+})
+afterEach(() => server.resetHandlers(...handlers))
 afterAll(() => server.close())
 ```
 

@@ -19,6 +19,18 @@
 
 import type { paths } from "@/lib/api/schema"
 
+/**
+ * Reexportação do mapa de rotas gerado (next-frontend-msw-base/TD-03).
+ *
+ * `mocks/` precisa de `paths` para tipar os handlers do MSW, mas a regra de
+ * `next-frontend-api-typing/TD-02` confina `lib/api/schema` a `lib/api/`. Reexportar aqui mantém
+ * `contracts.ts` como porta única do tipo gerado, sem abrir exceção de importação para `mocks/`.
+ *
+ * Esta é a única reexportação direta do schema — todo o resto deste módulo continua **derivando**
+ * por `Pick`/`Omit`/`Extract`/`Exclude`, nunca reexpondo tipos gerados crus.
+ */
+export type { paths }
+
 /* -------------------------------------------------------------------------- */
 /* POST /api/auth/login  →  POST /auth/login                                    */
 /* -------------------------------------------------------------------------- */

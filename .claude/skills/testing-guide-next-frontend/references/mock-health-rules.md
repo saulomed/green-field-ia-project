@@ -16,7 +16,7 @@ For `next-frontend`, the boundaries are:
 | `next/navigation`'s `redirect()` / `notFound()` functions | `vi.mock` with partial override (`{ ...orig, redirect: vi.fn() }`) | They throw special signals that break test assertions. Mock only the function being invoked. |
 | `next/headers` (`cookies()`, `headers()`) in server actions / route handlers | Test-time helper that injects via `Request` headers; or `vi.mock` when called directly | Some code reads these helpers instead of the `Request`. Mock to control the value under test. |
 | Analytics / tracking SDK calls (e.g., a future `track(...)`) | `vi.fn` for the module | Side-effect external systems — same rule as email in the universal table. |
-| Browser APIs not in jsdom/happy-dom (e.g., `IntersectionObserver`, `ResizeObserver`) | Polyfill via `vitest.setup.ts` or `vi.stubGlobal` | Test environment limitation, not a real boundary. |
+| Browser APIs not in jsdom (e.g., `IntersectionObserver`, `ResizeObserver`) | Polyfill via the lane's setup file or `vi.stubGlobal` | Test environment limitation, not a real boundary. |
 
 ## What to use real
 
@@ -58,5 +58,5 @@ Don't keep stacking mocks. Each extra mock is one more place the test diverges f
 
 ## Allowed but scoped
 
-- `vi.stubGlobal("IntersectionObserver", ...)` — only for browser APIs missing from happy-dom, registered in `vitest.setup.ts`.
+- `vi.stubGlobal("IntersectionObserver", ...)` — only for browser APIs missing from jsdom, registered in the lane's setup file.
 - `vi.useFakeTimers()` — only when the unit under test owns timer logic; restore in `afterEach`.
