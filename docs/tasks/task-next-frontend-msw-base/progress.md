@@ -1,0 +1,72 @@
+# task-next-frontend-msw-base — Progress
+
+**Status:** completed
+**SIs:** 5/5 completed
+
+## Final verification
+
+| Deliverable | Comando | Resultado |
+|---|---|---|
+| Testes | `docker compose exec next-frontend npm test` | exit 0 — 6 passando (lane `node`) |
+| Type-check | `docker compose exec next-frontend npx tsc --noEmit` | exit 0 |
+| Lint | `docker compose exec next-frontend npm run lint` | exit 0, sem achados |
+| Build | `docker compose exec next-frontend npm run build` | exit 0 — 5 páginas estáticas |
+| Drift check | `./scripts/check-api-types-drift.sh` | exit 0 |
+
+A lane `dom` roda sem erro de configuração e com zero arquivos — estado esperado, não falha: nenhum teste de componente entra nesta task.
+
+### SI-1 — Instalar o ferramental de teste (Infra)
+- **Status:** completed
+- **Tests:** no tests
+- **Observations:**
+  - **Compatibilidade da TD-03 confirmada nos dois eixos.** `openapi-msw@2.0.0` declara `peerDependencies: { msw: "^2.10.5" }`, satisfeito por `msw@2.15.0`; e seus próprios devDependencies fixam `openapi-typescript: ^7.9.1`, faixa que contém o `7.13.0` usado por `scripts/generate-api-types.sh`. A verificação exigida nominalmente pela TD-03 passa.
+  - **`@vitejs/plugin-react` fixado em `^5.2.0`, não na 6.x.** A 6.0.5 puxa `@rolldown/plugin-babel`, que exige `@babel/core@^8`, enquanto `shadcn@4.16.1` já prende a árvore em `@babel/core@7.29.7` via `@babel/preset-typescript@^7.27.1`. O `npm install` falhou com `ERESOLVE`. A 5.2.0 tem `vite` como único peer (`^4 || ^5 || ^6 || ^7 || ^8`), resolve limpo e continua compatível com vite 8 + vitest 4. Não usei `--legacy-peer-deps`: mascararia um conflito real de árvore.
+  - **`jsdom` fixado em `^29`, não na 30.** A 30.0.1 instalou com `EBADENGINE` — declara `node ^22.22.2 || ^24.15.0 || >=26.0.0`, e o container roda **Node v25.6.0**, faixa que a 25.x não satisfaz. A `jsdom@29` ainda declara `>=24.0.0`. Vale notar que o Node do container é ímpar (não-LTS); se a imagem migrar para 24 ou 26 LTS, a 30 volta a ser elegível.
+  - **Divergência de pin vs. `library-refs.md`**, sem efeito sobre as decisões: o cache registrou `openapi-msw ^1` (real: 2.0.0) e `jsdom ^27` (instalado: ^29). As decisões TD-02 e TD-03 escolheram bibliotecas, não versões.
+  - `npm test` deixou de reportar `Missing script` e passa a invocar o Vitest 4.1.10. A saída é `No test files found, exiting with code 1` — esperado, já que nem `vitest.config.ts` nem nenhum teste existem antes do SI-3 e do SI-4.
+  - 3 vulnerabilidades high (`postcss`, `sharp`, `next`) seguem reportadas — pré-existentes desde a `next-frontend-env-config`, só fecham com `npm audit fix --force` → `next@16.3.1`. Fora do escopo desta task.
+
+### SI-2 — Construir a superfície de fake do MSW, tipada pelo contrato (Setup)
+- **Status:** completed
+- **Tests:** no tests
+- **Observations:**
+  - **API do `openapi-msw@2.0.0` idêntica à documentada no `library-refs.md` para a v1** — `createOpenApiHttp<ApiSpec>(options?: HttpOptions)`, `HttpOptions.baseUrl`, resolver com `{ params, request, query, response }`, `response(200).json(...)`, `response.untyped(...)` e `http.untyped`. Verificado lendo `node_modules/openapi-msw/dist/exports/main.d.ts` e `dist/src/*.d.ts` da versão instalada, não pelo cache. A major 2 não quebrou nenhuma superfície que a TD-03 usa.
+  - **ACs 2 e 3 provadas por execução**, com um probe temporário (`mocks/__probe.ts`, criado e removido no mesmo passo — mesma técnica do `lib/__readonly-probe.ts` da env-config). Caminho inexistente: `TS2345: Argument of type '"/unknown"' is not assignable to parameter of type 'PathsForMethod<paths, "get">'`. Corpo divergente do status: `TS2345 ... Property 'channel' is missing in type '{ id: string; email: string; }' but required in type '{ id: string; email: string; channel: { nickname: string; }; }'`. `tsc --noEmit` voltou a exit 0 após a remoção do probe.
+  - **A imprecisão da spec do backend apareceu exatamente como a TD-03 previu.** `POST /auth/login` declara `RegisterResponseDto` (`{ id, email, channel: { nickname } }`) como resposta 200. Consequência prática: o corpo *correto* de um login (só `id` + `email`) **não compila** enquanto a spec não for corrigida, e o handler precisou incluir `channel.nickname` para type-checkar. O fixture está fiel ao contrato publicado, não ao comportamento desejado — quando o backend corrigir o DTO, este handler quebra no build, que é o sinal certo.
+  - **ACs 4 e 5 satisfeitas na substância, mas a redação literal falha.** As ACs pedem que `grep -rn "lib/api/schema" mocks/` e `grep -rn "process.env" mocks/` retornem vazio; ambos retornam **uma linha de comentário** em `mocks/handlers.ts` que cita esses identificadores justamente para registrar por que não são usados. Verificação por grep escopado a imports confirma o que importa: os únicos imports de `mocks/` são `msw`, `msw/node`, `openapi-msw`, `@/lib/api/contracts` e `@/lib/env`; nenhuma leitura de `process.env`. Se a AC for reusada em outra task, vale escopá-la a linhas de import.
+  - **Conflito entre o artefato de plano e a fronteira server/client, a resolver no SI-3.** A subseção `### Frontend Runtime → #### TD-04` do plano dizia que a lane de DOM recebe `handlers` **e** `bffHandlers`. Isso é estruturalmente impossível: `mocks/handlers.ts` importa `@/lib/env` para ler `config.api.baseUrl`, e `@t3-oss/env-core` decide server vs client por `typeof window === "undefined"` — sob `jsdom` a guarda dispara e a importação lança na avaliação do módulo (documentado na `next-frontend-env-config`, SI-3). Além de impossível, é desnecessário: per `next-frontend-env-config/TD-04`, código de browser só chama rotas relativas, nunca o `nestjs-api`. A composição correta é `node` → `handlers`; `dom` → `bffHandlers` apenas. Levantado ao usuário antes do SI-3.
+  - **Correção de atribuição, feita em 2026-08-15 durante o `/decide`.** Eu reportei este conflito como sendo "entre a TD-04 e a fronteira", e não era. A **TD-04 sempre esteve certa**: sua `**Decision:**` diz "o conjunto pertinente" e os Pros da Option B dizem "cada lane só vê a fronteira que de fato exercita" — exatamente o que foi implementado. A afirmação errada nasceu na Phase A do `/plan-build`, quando escrevi a subseção Frontend Runtime, e daí se propagou para esta observação. O SI-3 não desviou da decisão; realinhou o plano à decisão. Uma Revision foi acrescentada à TD-04 registrando a restrição técnica descoberta (a impossibilidade sob jsdom), não uma mudança de escolha.
+
+### SI-3 — Configurar as duas lanes de execução do Vitest (Setup)
+- **Status:** completed
+- **Tests:** no tests
+- **Observations:**
+  - **Realinhamento do plano à TD-04, com autorização explícita do usuário.** A lane de DOM recebe **apenas** `bffHandlers`, não `handlers` + `bffHandlers` como a subseção Frontend Runtime do plano dizia. Motivo duplo: (a) impossível — `mocks/handlers.ts` importa `@/lib/env`, e `@t3-oss/env-core` lança sob `jsdom` na avaliação do módulo (`next-frontend-env-config/TD-01`); (b) desnecessário — per `next-frontend-env-config/TD-04`, código de browser só chama rotas relativas, então handlers de upstream nessa lane seriam peso morto. _(Reclassificado em 2026-08-15: na hora eu chamei isto de "desvio da TD-04". Não era — a TD-04 pede "o conjunto pertinente" por lane, que é o que foi implementado. Ver a correção de atribuição na entrada do SI-2.)_
+  - **Bug meu, pego antes de rodar:** a primeira versão de `vitest.setup.node.ts` só chamava `resetHandlers(...handlers)` no `afterEach`. Como `mocks/server.ts` nasce sem handlers iniciais (per TD-04), o **primeiro** teste de cada arquivo rodaria com a lista vazia. Corrigido promovendo a lista a inicial dentro do `beforeAll`, logo após o `listen()`. Mesmo padrão aplicado no setup de DOM.
+  - **`vitest.config.ts` → `vitest.config.mts`.** O Vite 8 avisava que carregar o arquivo como CJS (o `package.json` não tem `"type": "module"`) usa um caminho que deixará de ser suportado. O rename tornou o arquivo ESM de verdade e quebrou o import de `@next/env`, que é CJS e cujo `loadEnvConfig` o lexer do Node não detecta como named export (`SyntaxError: Named export 'loadEnvConfig' not found`). Resolvido com import default + destructuring, que type-checa graças a `esModuleInterop: true`.
+  - **`vite-tsconfig-paths` removido do config — e a dependência ficou órfã.** O Vite 8 resolve tsconfig paths nativamente e emite aviso quando o plugin está presente; troquei por `resolve: { tsconfigPaths: true }`. O guia oficial de Vitest do Next.js ainda pede o plugin, o que explica ele ter entrado no plano. **A devDependency segue instalada e sem uso** — desinstalar exige o procedimento root, que não foi autorizado para isto.
+  - **AC-3 provada por execução** com um teste-canário temporário em `lib/__tests__/__smoke.test.ts`, criado e removido no mesmo passo: importar `@/lib/env` sob o projeto `node` não lança, e `config.api.baseUrl` vale `http://nestjs-api.test:3000`. Isso prova de uma vez três coisas — a fronteira server/client correta, o `loadEnvConfig` carregando a cascata de `.env.test`, e o alias `@/*` resolvendo pela opção nativa do Vite.
+  - `npx vitest run --project node` e `--project dom` carregam sem erro de configuração e reportam os `include` corretos. A saída é `No test files found, exiting with code 1` — esperado até o SI-4.
+  - Ruído sem efeito, para não assustar depois: o Node 25 emite `Warning: --localstorage-file was provided without a valid path` em cada run. Não é erro e não afeta resultado.
+
+### SI-4 — Materializar o contrato de teste diferido de `lib/env.ts`
+- **Status:** completed
+- **Tests:** 6 passing (`lib/__tests__/env.test.ts`, projeto `node`)
+- **Observations:**
+  - **A AC-2 não é satisfazível pela mensagem lançada — assertei nos dois pontos.** O `onValidationError` padrão do `@t3-oss/env-core` lança `new Error("Invalid environment variables")`, genérico, e manda os issues (onde o nome da variável aparece) para `console.error`. A AC pedia "erro que nomeia a variável". O teste assere o `rejects.toThrow("Invalid environment variables")` **e** que o payload capturado do `console.error` contém `API_BASE_URL`. Verificado na fonte instalada (`node_modules/@t3-oss/env-core/dist/index.js:30-32`), não por suposição.
+  - **Correção de design minha, feita antes de fechar o SI.** A primeira versão injetava `API_BASE_URL` em todos os seis casos, o que os tornava herméticos — mas aí a AC "remover `API_BASE_URL` de `.env.test` faz a suíte falhar" era **inverificável**, e nada na suíte exercitava a cascata do `loadEnvConfig`. Reescrevi o caso 1 para depender da cascata (não injeta nada) e deixei os outros cinco injetando o próprio valor. Um caso acoplado ao `.env.test`, cinco determinísticos.
+  - **AC-2 provada por execução destrutiva e reversível**: comentei a linha `API_BASE_URL` de `.env.test`, rodei `npm test` e obtive `❌ Invalid environment variables: [ path: [ 'API_BASE_URL' ] ]` com `Failed Suites 1`. Restaurei o arquivo e confirmei `git diff` vazio. Detalhe revelado pela prova: a falha acontece na **coleta**, não nos testes (`Tests: no tests`), porque `vitest.setup.node.ts` importa `mocks/handlers.ts`, que importa `@/lib/env`. Ou seja, o setup da lane inteira depende de env válido — mais rigoroso do que a AC supunha.
+  - **AC-3 provada, e ela valida retroativamente o desvio do SI-3.** `npx vitest run --environment jsdom` **não** sobrescreve o `environment` declarado no projeto (o run reportou `environment 0ms` e passou — resultado inconclusivo, não use esse método). A prova real foi colocar um arquivo-canário sob `components/__tests__/` (dentro do `include` da lane de DOM) importando `@/lib/env`: falhou com `Error: ❌ Attempted to access a server-side environment variable on the client`, com `environment 515ms` confirmando o jsdom instanciado. Canário removido. É exatamente o erro que a lane de DOM teria tomado se `handlers.ts` tivesse sido composto nela, como a TD-04 mandava.
+  - O caso 6 é **guarda de build, não de runtime**, e está escrito assim de propósito: `as const` não congela o objeto, então a reatribuição funcionaria se executada. A atribuição vive dentro de uma função nunca chamada, sob `@ts-expect-error`; quem prova a AC é o `tsc --noEmit`, que falha com "Unused '@ts-expect-error' directive" se alguém remover o `as const`. O comentário no arquivo registra isso para não parecer teste vazio.
+
+### SI-5 — Alinhar a skill de testes e o `CLAUDE.md` ao ferramental entregue
+- **Status:** completed
+- **Tests:** no tests
+- **Observations:**
+  - **O template de `vitest.config.ts` não estava no `SKILL.md`**, como a ação técnica 1 supunha — vive em `references/external-systems.md`. Corrigi onde ele está, e o `SKILL.md` recebeu o que era de fato dele: a nota de status e as anti-patterns.
+  - **A AC-1 (`grep happy-dom` vazio) exigiu tocar cinco ocorrências, não uma.** Além do template, havia menções incidentais em `SKILL.md`, `references/mock-health-rules.md` (duas) e `references/external-systems.md`. Todas reescritas para `jsdom`, que é o ambiente decidido.
+  - **Efeito colateral do SI-3 propagado para a skill.** `references/gotchas.md` § "Path alias resolution" mandava declarar `resolve.alias` com `path.resolve`; trocado pela opção nativa `resolve: { tsconfigPaths: true }` do Vite 8, com a nota de que o guia oficial do Next ainda prescreve o plugin. Todas as citações de `vitest.config.ts` viraram `vitest.config.mts`.
+  - **Três armadilhas descobertas durante esta task foram registradas na skill**, para não serem redescobertas: (a) o default de `jsdom.url` é a porta 3000, que aqui é do `nestjs-api`; (b) `jsdom@30` exclui o Node 25 por `engines`; (c) o flag `--environment` do CLI **não** sobrescreve o `environment` declarado no projeto — a seleção é por `--project`.
+  - **O snippet de ciclo de vida do MSW foi corrigido em três lugares** (`gotchas.md`, `external-systems.md`, `next-frontend/CLAUDE.md`) para promover a lista a handlers iniciais no `beforeAll`. O snippet antigo, com `resetHandlers()` sem argumentos, reproduzia exatamente o bug que peguei no SI-3 quando combinado com um `setupServer()` vazio.
+  - `next-frontend/CLAUDE.md` também teve a § Commands corrigida (dizia que **nenhum** script de teste existia) e o bullet de handlers do BFF atualizado para a tipagem por `openapi-msw`. O bloco de chaves do Figma que o usuário adicionou manualmente no topo do arquivo foi preservado — todas as edições foram cirúrgicas.
+  - Guardas de regressão em verde ao fim: 6 testes passando, `tsc --noEmit` exit 0, `lint` exit 0.
