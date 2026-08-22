@@ -1,6 +1,15 @@
 ---
 scope_type: phase
 related_phases: [2]
+covers_capabilities:
+  - "Serviço de envio de e-mails transacionais"
+  - "Cadastro de usuário com e-mail e senha"
+  - "Criação automática do canal do usuário a partir do prefixo do e-mail"
+  - "Confirmação de conta via e-mail com link de ativação"
+  - "Login e controle de sessão do usuário"
+  - "Logout"
+  - "Recuperação de senha: solicitação via e-mail → link com token → redefinição"
+depends_on_slices: []
 status: decided
 date: 2026-06-04
 scope_description: "Autenticação e gerenciamento de conta: cadastro, confirmação por e-mail, login/sessão, logout e recuperação de senha"
@@ -280,7 +289,7 @@ As decisões TD-03 e TD-04 dependem de TD-01. TD-06 é independente da estratég
 
 **Scope:** Cross-layer
 
-**Capability:** Telas de cadastro, login, confirmação de conta e recuperação de senha
+**Capability:** Transversal — covers: Serviço de envio de e-mails transacionais; Cadastro de usuário com e-mail e senha; Criação automática do canal do usuário a partir do prefixo do e-mail; Confirmação de conta via e-mail com link de ativação; Login e controle de sessão do usuário; Logout; Recuperação de senha: solicitação via e-mail → link com token → redefinição
 
 **Context:** O `project-plan.md` lista "Telas de cadastro, login, confirmação e recuperação" como capacidade da Fase 02, mas a Fase 01 adiou explicitamente o Next.js e o `next-frontend/` ainda não existe. As decisões TD-01 a TD-08 são todas de backend. A decisão é cross-layer porque fixa quais rotas de página o frontend futuro precisa expor para os links de e-mail funcionarem.
 
@@ -303,6 +312,7 @@ As decisões TD-03 e TD-04 dependem de TD-01. TD-06 é independente da estratég
 **Revisions:**
 - 2026-07-17 — Links de e-mail passam a apontar para paths de página dedicados (`/confirm-account`, `/reset-password`), distintos dos paths da API. Rationale: a implementação inicial apontava para `/auth/confirm` e `/auth/reset-password`, que só aceitam POST com o token no body — um link de e-mail sempre abre via GET no navegador, então o clique nunca alcançaria a rota. A página lê o `token` da query string e então chama o POST real da API.
 - 2026-07-18 — Confirmação de conta convertida para `GET /auth/confirm?token=…`, com o link do e-mail voltando a apontar direto para a API; o reset de senha permanece apontando para a página `/reset-password`. Rationale: a confirmação não exige nenhum dado do usuário além do token, dispensando tela intermediária; o reset exige formulário para a nova senha. Trade-off aceito: `GET` é pré-buscável por scanners/proxies de e-mail, podendo disparar a confirmação automaticamente — risco baixo dado o token assinado e expirável (24h).
+- 2026-08-22 — Campo `Capability:` trocado de "Telas de cadastro, login, confirmação de conta e recuperação de senha" para `Transversal — covers:` com os sete bullets que a slice `auth` reivindica em `covers_capabilities`. Rationale: sob o modelo de slicing, o bullet das telas passou a ser propriedade da slice irmã `auth-frontend`, e o `Capability:` é o campo pelo qual o `/plan-build` agrupa TDs — apontando para fora do escopo declarado, a TD ficaria órfã no artefato final. A decisão (Option A — backend-only) não muda; o adiamento das telas segue descrito na prosa e registrado em `## Non-UI / Deferred Capabilities` (validation.md IC-2).
 
 ---
 
