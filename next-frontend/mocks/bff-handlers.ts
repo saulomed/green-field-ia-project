@@ -1,6 +1,11 @@
 import { http, HttpResponse, type RequestHandler } from "msw"
 
-import type { RegisterBffRequest, RegisterBffResponse } from "@/lib/api/contracts"
+import type {
+  LoginBffRequest,
+  LoginBffResponse,
+  RegisterBffRequest,
+  RegisterBffResponse,
+} from "@/lib/api/contracts"
 
 /**
  * Fake das rotas relativas `/api/...` do próprio Next — a superfície que a lane de browser
@@ -32,6 +37,24 @@ export const bffHandlers: RequestHandler[] = [
       { status: 201 },
     )
   }),
+
+  http.post("/api/auth/login", async ({ request }) => {
+    const { email } = (await request.json()) as LoginBffRequest
+    // Os cookies de sessão são reemitidos pelo route handler, não pelo corpo —
+    // o fake não os declara porque nada no browser os lê (`auth-frontend/TD-03`).
+    return HttpResponse.json(
+      {
+        id: "00000000-0000-4000-8000-000000000001",
+        email,
+        channel: { nickname: "tester" },
+      } satisfies LoginBffResponse,
+      { status: 200 },
+    )
+  }),
+
+  // O upstream responde `204` exista ou não a conta, por design — o fake não teria
+  // como oferecer um segundo desfecho sem inventar contrato.
+  http.post("/api/auth/forgot-password", () => new HttpResponse(null, { status: 204 })),
 
   http.post("/api/auth/resend-confirmation", () => new HttpResponse(null, { status: 204 })),
 ]
