@@ -222,6 +222,7 @@ export interface components {
         RegisterDto: {
             /** Format: email */
             email: string;
+            name: string;
             password: string;
         };
         RegisterResponseDto: {

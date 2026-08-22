@@ -7,6 +7,7 @@ import { databaseConfig } from '../config/database.config';
 import { authConfig, AuthConfig } from '../config/auth.config';
 import { envValidationSchema } from '../config/env.validation';
 import { DatabaseModule } from '../database/database.module';
+import { insertUser } from '../database/migration-test-helpers';
 import { SessionService } from './session.service';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { RefreshTokenReusedException } from '../common/exceptions/refresh-token-reused.exception';
@@ -55,10 +56,7 @@ describe('SessionService (integration)', () => {
     service = module.get<SessionService>(SessionService);
 
     await db.query(`DELETE FROM users WHERE id = $1`, [userId]);
-    await db.query(
-      `INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`,
-      [userId, 'session-integration@example.com', 'hash'],
-    );
+    await insertUser(db, { id: userId, email: 'session-integration@example.com' });
   });
 
   afterAll(async () => {

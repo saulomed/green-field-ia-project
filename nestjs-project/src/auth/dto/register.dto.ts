@@ -12,6 +12,10 @@ export class RegisterDto {
   email: string;
 
   @IsString()
+  @Length(1, 255)
+  name: string;
+
+  @IsString()
   @Length(8, 128)
   password: string;
 }

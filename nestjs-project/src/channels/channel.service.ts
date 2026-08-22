@@ -21,7 +21,8 @@ export class ChannelService {
   /**
    * Creates a channel for the given user. The nickname is derived from the
    * email prefix (normalized to [a-z0-9]); collisions are resolved by appending
-   * a 4-character random alphanumeric suffix.
+   * a 4-character random alphanumeric suffix. The display name is seeded from
+   * the user's own name — the two diverge as soon as the channel is renamed.
    *
    * @param user - The owning user
    * @param manager - Optional EntityManager to join the caller's transaction
@@ -35,7 +36,7 @@ export class ChannelService {
     const channel = repository.create({
       userId: user.id,
       nickname,
-      name: base,
+      name: user.name,
       description: null,
     });
 

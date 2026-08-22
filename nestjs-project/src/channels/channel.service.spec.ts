@@ -63,7 +63,7 @@ describe('ChannelService', () => {
   });
 
   describe('createForUser', () => {
-    const user = { id: 'user-uuid', email: 'john.doe@gmail.com' } as User;
+    const user = { id: 'user-uuid', email: 'john.doe@gmail.com', name: 'John Doe' } as User;
 
     it('uses the injected repository when no manager is provided', async () => {
       const savedChannel = { id: 'ch-uuid', nickname: 'johndoe' } as Channel;
@@ -75,7 +75,7 @@ describe('ChannelService', () => {
       expect(injectedRepository.create).toHaveBeenCalledWith({
         userId: user.id,
         nickname: 'johndoe',
-        name: 'johndoe',
+        name: 'John Doe',
         description: null,
       });
       expect(injectedRepository.save).toHaveBeenCalledWith(savedChannel);

@@ -4,7 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DataSource, QueryFailedError } from 'typeorm';
 import { databaseConfig } from '../config/database.config';
 import { DatabaseModule } from './database.module';
-import { getTableColumns, hasFkOnUserId } from './migration-test-helpers';
+import { getTableColumns, hasFkOnUserId, insertUser } from './migration-test-helpers';
 
 describe('auth-tokens migration (integration)', () => {
   let module: TestingModule;
@@ -39,10 +39,7 @@ describe('auth-tokens migration (integration)', () => {
   });
 
   async function createUser(id: string, email: string): Promise<void> {
-    await db.query(
-      `INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`,
-      [id, email, 'hash'],
-    );
+    await insertUser(db, { id, email });
   }
 
   it('should have the refresh_tokens table with expected columns', async () => {

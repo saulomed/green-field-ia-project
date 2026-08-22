@@ -84,7 +84,7 @@ export class AuthService {
         }
 
         const user = await this.usersService.create(
-          { email: dto.email, passwordHash },
+          { email: dto.email, name: dto.name, passwordHash },
           manager,
         );
 

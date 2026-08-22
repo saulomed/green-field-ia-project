@@ -10,7 +10,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
-import { awaitMessageTo } from './support/mailpit';
+import { awaitMessageTo, extractToken } from './support/mailpit';
 
 describe('Auth — POST /auth/login (e2e)', () => {
   let app: INestApplication<App>;
@@ -54,11 +54,11 @@ describe('Auth — POST /auth/login (e2e)', () => {
   async function registerAndConfirmUser(email: string): Promise<void> {
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password })
+      .send({ email, name: 'E2E Tester', password })
       .expect(201);
 
     const message = await awaitMessageTo(email);
-    const token = message!.Text.match(/token=(\S+)/)![1];
+    const token = extractToken(message!);
 
     await request(app.getHttpServer())
       .get('/auth/confirm')
@@ -126,7 +126,7 @@ describe('Auth — POST /auth/login (e2e)', () => {
     const email = 'e2e-login-unconfirmed@example.com';
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password })
+      .send({ email, name: 'E2E Tester', password })
       .expect(201);
 
     const response = await request(app.getHttpServer())

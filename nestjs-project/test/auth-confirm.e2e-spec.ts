@@ -56,7 +56,7 @@ describe('Auth — GET /auth/confirm, POST /auth/resend-confirmation (e2e)', () 
   async function registerUser(email: string): Promise<void> {
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password: 'super-secret-1' })
+      .send({ email, name: 'E2E Tester', password: 'super-secret-1' })
       .expect(201);
   }
 

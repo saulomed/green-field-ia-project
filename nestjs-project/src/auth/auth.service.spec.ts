@@ -65,6 +65,7 @@ describe('AuthService', () => {
 
   const dto: RegisterDto = {
     email: 'john.doe@gmail.com',
+    name: 'John Doe',
     password: 'super-secret',
   };
 
@@ -155,7 +156,7 @@ describe('AuthService', () => {
 
     expect(passwordService.hash).toHaveBeenCalledWith(dto.password);
     expect(usersService.create).toHaveBeenCalledWith(
-      { email: dto.email, passwordHash: 'hashed-password' },
+      { email: dto.email, name: dto.name, passwordHash: 'hashed-password' },
       transactionManager,
     );
   });

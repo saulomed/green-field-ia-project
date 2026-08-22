@@ -12,6 +12,7 @@ import { ChannelService } from '../channels/channel.service';
  */
 export interface CreateUserInput {
   email: string;
+  name: string;
   passwordHash: string;
 }
 
@@ -41,7 +42,7 @@ export class UsersService {
   /**
    * Persists a new, unconfirmed user account.
    *
-   * @param input - E-mail and already-hashed password
+   * @param input - E-mail, full name and already-hashed password
    * @param manager - Optional EntityManager to join the caller's transaction
    * @returns The persisted User entity
    */
@@ -52,6 +53,7 @@ export class UsersService {
     const repository = this.resolveRepository(manager);
     const user = repository.create({
       email: input.email,
+      name: input.name,
       passwordHash: input.passwordHash,
       isConfirmed: false,
     });

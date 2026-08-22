@@ -56,12 +56,12 @@ describe('Error envelope — ValidationPipe normalization (e2e)', () => {
     const email = `e2e-envelope-${Date.now()}@example.com`;
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password: 'super-secret-1' })
+      .send({ email, name: 'E2E Tester', password: 'super-secret-1' })
       .expect(201);
 
     const response = await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password: 'another-secret' })
+      .send({ email, name: 'E2E Tester', password: 'another-secret' })
       .expect(409);
 
     expect(response.body).toMatchObject({

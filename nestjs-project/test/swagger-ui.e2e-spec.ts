@@ -5,7 +5,7 @@ import { DataSource } from 'typeorm';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { createTestApp } from './support/create-test-app';
-import { awaitMessageTo } from './support/mailpit';
+import { awaitMessageTo, extractToken } from './support/mailpit';
 
 describe('swagger-ui', () => {
   describe('1. Exposição por ambiente', () => {
@@ -162,11 +162,11 @@ describe('swagger-ui', () => {
     async function registerAndConfirmUser(email: string): Promise<void> {
       await request(app.getHttpServer())
         .post('/auth/register')
-        .send({ email, password })
+        .send({ email, name: 'E2E Tester', password })
         .expect(201);
 
       const message = await awaitMessageTo(email);
-      const token = message!.Text.match(/token=(\S+)/)![1];
+      const token = extractToken(message!);
 
       await request(app.getHttpServer())
         .get('/auth/confirm')

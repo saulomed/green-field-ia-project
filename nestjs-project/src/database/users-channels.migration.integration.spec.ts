@@ -4,7 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DataSource, QueryFailedError } from 'typeorm';
 import { databaseConfig } from '../config/database.config';
 import { DatabaseModule } from './database.module';
-import { getTableColumns, hasFkOnUserId } from './migration-test-helpers';
+import { getTableColumns, hasFkOnUserId, insertUser } from './migration-test-helpers';
 
 describe('users/channels migration (integration)', () => {
   let module: TestingModule;
@@ -42,12 +42,9 @@ describe('users/channels migration (integration)', () => {
   it('should enforce uniqueness on users.email', async () => {
     const userId1 = '00000000-0000-0000-0000-000000000001';
     const userId2 = '00000000-0000-0000-0000-000000000002';
-    await db.query(
-      `INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`,
-      [userId1, 'dup@example.com', 'hash'],
-    );
+    await insertUser(db, { id: userId1, email: 'dup@example.com' });
     await expect(
-      db.query(`INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`, [userId2, 'dup@example.com', 'hash']),
+      insertUser(db, { id: userId2, email: 'dup@example.com' }),
     ).rejects.toThrow(QueryFailedError);
     await db.query(`DELETE FROM users WHERE id = $1`, [userId1]);
   });
@@ -57,10 +54,8 @@ describe('users/channels migration (integration)', () => {
     const userId2 = '00000000-0000-0000-0000-000000000011';
     const chanId1 = '00000000-0000-0000-0000-000000000020';
     const chanId2 = '00000000-0000-0000-0000-000000000021';
-    await db.query(`INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3), ($4, $5, $6)`, [
-      userId, 'nick1@example.com', 'hash',
-      userId2, 'nick2@example.com', 'hash',
-    ]);
+    await insertUser(db, { id: userId, email: 'nick1@example.com' });
+    await insertUser(db, { id: userId2, email: 'nick2@example.com' });
     await db.query(`INSERT INTO channels (id, user_id, nickname, name) VALUES ($1, $2, $3, $4)`, [chanId1, userId, 'samename', 'Name 1']);
     await expect(
       db.query(`INSERT INTO channels (id, user_id, nickname, name) VALUES ($1, $2, $3, $4)`, [chanId2, userId2, 'samename', 'Name 2']),
@@ -71,7 +66,7 @@ describe('users/channels migration (integration)', () => {
   it('should cascade-delete channel when user is removed', async () => {
     const userId = '00000000-0000-0000-0000-000000000030';
     const chanId = '00000000-0000-0000-0000-000000000040';
-    await db.query(`INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`, [userId, 'cascade@example.com', 'hash']);
+    await insertUser(db, { id: userId, email: 'cascade@example.com' });
     await db.query(`INSERT INTO channels (id, user_id, nickname, name) VALUES ($1, $2, $3, $4)`, [chanId, userId, 'cascade_nick', 'Cascade Channel']);
 
     await db.query(`DELETE FROM users WHERE id = $1`, [userId]);

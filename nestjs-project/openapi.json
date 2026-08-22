@@ -574,6 +574,11 @@
             "maxLength": 254,
             "format": "email"
           },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
           "password": {
             "type": "string",
             "minLength": 8,
@@ -582,6 +587,7 @@
         },
         "required": [
           "email",
+          "name",
           "password"
         ]
       },

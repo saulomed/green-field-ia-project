@@ -39,7 +39,7 @@ describe('Auth — POST /auth/forgot-password, /auth/reset-password (e2e)', () =
   async function registerConfirmAndLogin(email: string): Promise<string> {
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password })
+      .send({ email, name: 'E2E Tester', password })
       .expect(201);
 
     const confirmMessage = await awaitMessageTo(email);

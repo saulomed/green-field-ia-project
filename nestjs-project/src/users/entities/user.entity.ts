@@ -22,6 +22,14 @@ export class User {
   @Column({ type: 'varchar', length: 255, unique: true })
   email: string;
 
+  /**
+   * The person's full name, as submitted at registration. Seeds the display
+   * name of the Channel created alongside the account, but is not the same
+   * value: renaming the channel later leaves this untouched.
+   */
+  @Column({ type: 'varchar', length: 255 })
+  name: string;
+
   @Column({ type: 'varchar', length: 255, name: 'password_hash' })
   passwordHash: string;
 

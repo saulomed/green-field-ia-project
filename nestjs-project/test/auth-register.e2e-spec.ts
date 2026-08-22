@@ -54,7 +54,7 @@ describe('Auth — POST /auth/register (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password: 'super-secret-1' })
+      .send({ email, name: 'E2E Tester', password: 'super-secret-1' })
       .expect(201);
 
     expect(response.body).toEqual({
@@ -74,12 +74,12 @@ describe('Auth — POST /auth/register (e2e)', () => {
     const email = 'e2e-register-duplicate@example.com';
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password: 'super-secret-1' })
+      .send({ email, name: 'E2E Tester', password: 'super-secret-1' })
       .expect(201);
 
     const response = await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password: 'another-secret' })
+      .send({ email, name: 'E2E Tester', password: 'another-secret' })
       .expect(409);
 
     expect(response.body).toMatchObject({
@@ -105,7 +105,7 @@ describe('Auth — POST /auth/register (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password: 'super-secret-1' })
+      .send({ email, name: 'E2E Tester', password: 'super-secret-1' })
       .expect(201);
 
     const message = await awaitMessageTo(email);
