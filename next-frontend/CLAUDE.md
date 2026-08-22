@@ -80,7 +80,7 @@ npm run check:tokens                     # Guards the globals.css theming contra
 npx tsc --noEmit                         # Type-check (the build does not emit JS via tsc)
 ```
 
-Test commands — the Vitest ones are wired; **`test:e2e` does not exist yet** and lands with the Playwright bootstrap (see "Testing"):
+Test commands — both lanes are wired (see "Testing"):
 
 ```bash
 npm test                                 # vitest run — unit + integration, both lanes
@@ -89,9 +89,13 @@ npm test -- lib/__tests__/foo.test.ts    # single Vitest file
 npx vitest run --project node            # only the node lane (route handlers, lib/)
 npx vitest run --project dom             # only the jsdom lane (components, hooks)
 
-npm run test:e2e                         # playwright test — NOT wired yet
+npm run test:e2e                         # playwright test — drives the production build
 npm run test:e2e -- tests/login.e2e-spec.ts   # single Playwright spec
+
+npx playwright install chromium          # one-time: download the browser (see below)
 ```
+
+The Chromium **system libraries** ship in the image (`Dockerfile.dev`); the **browser binary** does not — Playwright downloads it into `/home/node/.cache/ms-playwright`, which `compose.yaml` keeps in the named volume `playwright-browsers` so it survives container recreation. Run `npx playwright install chromium` once after creating the volume; a bare `Failed to launch` or a missing `.so` means the image is out of date, not that the download is missing.
 
 The CLI's `--environment` flag does **not** override a project's declared `environment` — pick the lane with `--project`, never with `--environment`.
 
@@ -189,7 +193,7 @@ The one thing worth repeating: run `npm run check:tokens` after any change to `g
 
 ## Testing
 
-The **Vitest + MSW half is wired** (task `next-frontend-msw-base`): `vitest.config.mts`, `vitest.setup.node.ts`, `vitest.setup.dom.ts`, `mocks/{server,handlers,bff-handlers}.ts`, and the `test` / `test:watch` scripts all exist. **Playwright is not** — `playwright.config.ts`, `tests/auth.setup.ts` and the `test:e2e` script still do not exist, and no task owns that bootstrap yet. The E2E rules below are the standing contract for when it lands.
+Both halves are wired. **Vitest + MSW** (task `next-frontend-msw-base`): `vitest.config.mts`, `vitest.setup.node.ts`, `vitest.setup.dom.ts`, `mocks/{server,handlers,bff-handlers}.ts`, and the `test` / `test:watch` scripts. **Playwright** (`phase-02-auth-frontend/SI-02.8`): `playwright.config.ts`, `tests/auth.setup.ts`, `tests/unique-identity.ts` and the `test:e2e` script, driving the production build against the real stack. The per-screen specs are authored separately by `/plan-test-specs` from the plans in `specs/`; only `tests/stack-smoke.e2e-spec.ts` exists so far.
 
 ### Two execution lanes, selected by path
 

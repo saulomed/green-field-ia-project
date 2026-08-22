@@ -19,6 +19,11 @@ services:
       - 3001:3001
     volumes:
       - ./next-frontend:/home/node/app
+      # Os browsers do Playwright vivem fora do bind mount, em `~/.cache`, então
+      # toda recriação do container apagava o download de ~150 MB. O volume nomeado
+      # os separa do ciclo de vida do container; `npx playwright install chromium`
+      # volta a ser um passo de setup, não um imposto por recriação.
+      - playwright-browsers:/home/node/.cache/ms-playwright
     # No `env_file` on purpose. `next-frontend/.env` is loaded by `@next/env` —
     # by `next build`/`next dev`/`next start`, by `vitest.config.mts`, and by
     # `playwright.config.ts`, each calling `loadEnvConfig` itself. Injecting the
@@ -28,3 +33,6 @@ services:
     # development value instead of its own.
     depends_on:
       - nestjs-api
+
+volumes:
+  playwright-browsers:
