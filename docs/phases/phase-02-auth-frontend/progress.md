@@ -1,7 +1,7 @@
 # phase-02-auth-frontend — Progress
 
-**Status:** in_progress
-**SIs:** 21/27 completed
+**Status:** completed
+**SIs:** 27/27 completed
 
 ### SI-02.0.1 — Infra: instalar os primitives shadcn em lote
 - **Status:** completed
@@ -180,19 +180,77 @@ Pedida pelo usuário depois da SI-02.15b, com a opção "`users.name` + semear `
 - **Correção fora de escopo:** `api-error.decorators.spec.ts` afirmava que `ErrorResponseDto` tem exatamente `statusCode`/`error`/`message`. O commit `c062a64` (SI-02.1) adicionou `details` e deixou a asserção defasada — a suíte do backend já estava vermelha antes desta mudança. Assertion atualizada.
 
 ### SI-02.16.0 — Drift audit: Tela de login
-- **Status:** pending
+- **Status:** completed
+- **Tests:** no tests (audit-only; o relatório é o entregável)
+- **Observations:**
+  - A ação técnica 1 nomeia a skill `figma:figma-implement-design`, que não existe — mesma pendência já registrada em SI-02.15.0. Auditoria feita com `figma-design-to-code` + `get_design_context` no nó `138:179`; nada ficou bloqueado, porque o procedimento está descrito no próprio SI e no schema do relatório. SI-02.17.0 repete o nome errado.
+  - Cinco dos seis componentes reusados voltaram `alinhado` com `Prior` "honored" — o esperado, já que a tela de login não pede nada além do que `/signup` já exigiu. Nenhum `CONFLICT`: as duas telas concordam em todas as dimensões auditadas.
+  - Único drift: `card.tsx` perdeu o `min-w-[280px]` da base quando o `/simplify` de SI-02.15b o moveu para o call site. O nó `143:1250` pede o mesmo valor no mesmo lugar, então a decisão é `exception` (não `auto-Edit`) — reinstalar na base duplicaria uma restrição de composição. SI-02.16a deve aplicar `min-w-[280px]` no `Card` da página, como `/signup` faz.
+  - `app/login/page.tsx` já existe de fase anterior e monta o cartão com um `div` cru (`rounded-2 border border-border bg-card`) em vez do `Card`. SI-02.16a substitui a árvore, conforme a ação técnica 2 já antecipa.
+  - Inconsistência de copy confirmada no Figma: o placeholder do campo de senha (`147:540`) diz "Enter your email". A página em disco já usa "Enter your password". **Confirmado pelo usuário em 2026-08-22 como erro do design**; a página em disco já está correta e o Figma é que precisa ser ajustado. SI-02.16a herda a decisão.
+  - `git diff --name-only HEAD -- next-frontend` vazio ao fim do SI, como exige a AC.
 
 ### SI-02.16a — Tela de login (visual shell)
-- **Status:** pending
+- **Status:** completed
+- **Tests:** no tests (shell aferido pelo build; unit em SI-02.16b, E2E por `/plan-test-specs`)
+- **Observations:**
+  - Ação 1 (aplicar as decisões de drift) foi um no-op de código: as seis linhas do relatório são `skip` ×5 + `exception` ×1. O `min-w-[280px]` do `Card` entrou no call site da página, como a `exception` determina.
+  - `app/login/page.tsx` foi reescrita: o cartão feito de `div` cru (`rounded-2 border border-border bg-card`) virou `<Card>`, e o formulário saiu da página para `components/login-form.tsx`. Nenhum nó novo do Figma foi introduzido — é a mesma árvore, agora pelo primitive.
+  - Grupo da senha (`147:537`) montado como uma única linha `flex-wrap` com `justify-between`: label à esquerda, "Forgot password?" à direita e o `TextField` (que já é `w-full`) quebrando para a linha de baixo. É a tradução direta do `content-start flex flex-wrap` do Figma, sem wrapper extra.
+  - Placeholder da senha mantido em "Enter your password", divergindo do Figma (`147:540` diz "Enter your email"). A inconsistência já estava registrada no inventário e no SI; reproduzi-la seria copiar um erro de copy evidente. **Confirmado pelo usuário em 2026-08-22 como erro do design** — nenhuma mudança de código foi necessária, e o ajuste pendente é no arquivo Figma.
+  - **Verificação visual não executada:** os browsers do Playwright vivem em `/home/node/.cache/ms-playwright`, fora do bind mount, e foram apagados quando o container foi recriado para a mudança de `env_file` (SI-02.15b). A AC "a renderização corresponde ao nó `138:179`" fica aferida só pelo build e pela paridade estrutural com `/signup`, que foi verificada visualmente. Restaurar com `docker compose exec next-frontend npx playwright install chromium`.
+  - `npx tsc --noEmit`, `npm run build`, `npm run check:tokens` e `npm run lint` passam (lint com o único warning pré-existente de `_password`).
 
 ### SI-02.16b — Tela de login (lógica & wiring)
-- **Status:** pending
+- **Status:** completed
+- **Tests:** 10 novos em `components/__tests__/login-form.test.tsx`; 94 passando no total (17 arquivos, sem regressão)
+- **Observations:**
+  - **Duas extrações de reuso**, feitas aqui porque a tela de login precisava das duas peças e duplicá-las seria pior do que mexer no código de `/signup`:
+    - `hooks/use-resend-confirmation.ts` — a máquina de estados do reenvio (`idle`/`sending`/`sent`/`cooldown`/`error`) saiu do `SignupSuccessPanel`. As duas telas chamam o mesmo endpoint com os mesmos desfechos; a nota de contrato sobre o `409` que o backend nunca devolve foi junto.
+    - `components/form-field.tsx` — o `Field` local do `signup-form.tsx` virou `FormField` compartilhado, com um slot `action` novo para o "Forgot password?" na linha do label. `PasswordField` continua local ao signup, porque o nó de login não tem o toggle de visibilidade.
+  - **Destino pós-login:** nenhuma TD desta slice decide para onde ir depois do `200`. Implementado como `router.replace("/")` + `router.refresh()` — `/` é a única outra rota que existe, e o `refresh` faz os Server Components rerenderizarem já com a sessão. Escolha do implementador, registrada no docblock.
+  - `CREDENCIAIS_INVALIDAS` cai em `root.serverError` sem tocar em `aria-invalid` de nenhum campo — dois testes cobrem isso, e um deles compara o texto exibido para senha errada e para e-mail desconhecido, provando que são idênticos. Sai de graça do `error-map.ts`, que só mapeia `EMAIL_JA_EXISTE` para campo.
+  - O CTA de reenvio só aparece no `403 EMAIL_NAO_CONFIRMADO`, e o e-mail que ele reenvia é o que falhou no submit, guardado em estado — não o valor corrente do input, que o usuário pode ter editado depois. Superfície sem nó no Figma; copy e posicionamento são decisão do implementador, como o SI já previa.
+  - `mocks/bff-handlers.ts` ganhou o caminho feliz de `POST /api/auth/login`, com o corpo amarrado por `satisfies LoginBffResponse`. O fake não declara cookie: o BFF os reemite e nada no browser os lê.
+  - `useRouter` é mockado no teste (não tem implementação fora do runtime do Next). Os `vi.fn()` são de módulo — o factory do `vi.mock` é içado e não fecha sobre estado por teste —, então a contagem de chamadas vaza entre testes sem um `mockClear` no `beforeEach`; primeira rodada falhou exatamente por isso.
+  - `npm test` (94), `npx tsc --noEmit`, `npm run build`, `npm run lint` (só o warning pré-existente de `_password`) e `npm run check:tokens` passam. O E2E de `specs/login.plan.md` continua sendo autoria externa do `/plan-test-specs`, e o lane E2E segue sem browsers instalados.
 
 ### SI-02.17.0 — Drift audit: Tela de solicitação de redefinição de senha
-- **Status:** pending
+- **Status:** completed
+- **Tests:** no tests (audit-only; o relatório é o entregável)
+- **Observations:**
+  - Terceira ocorrência do nome de skill errado (`figma:figma-implement-design`) nas Technical actions; auditoria feita com `figma-design-to-code` + `get_design_context` no nó `140:289`, como nas duas anteriores.
+  - Seis dos sete componentes reusados voltaram `alinhado`. Nenhum `CONFLICT` em toda a fase: as três telas concordam em todas as dimensões auditadas, o que era o esperado — elas compartilham o mesmo cartão de autenticação.
+  - `card.tsx` repete o `drift menor`/`exception` de SI-02.16.0, com `Prior` apontando para lá em vez de para SI-02.15.0 — a lineage segue a decisão mais recente sobre a mesma dimensão.
+  - `ArrowBackIcon` aparece nesta tela (`143:2343`, 24px em `left-16/top-16`) com a mesma geometria de `/signup`; `alinhado`.
+  - **Duas inconsistências de copy confirmadas no Figma**, ambas já registradas no inventário e ainda sem resposta de quem desenhou: o `AuthFooter` (`2394:2276`) pergunta "Remember your password?" mas rotula o link como "Sign up" — quem lembrou a senha quer entrar, não se cadastrar; e o destino do `BackLink` (`143:2343`) não está definido em nenhum lugar. SI-02.17a decidiu os dois; **o usuário confirmou em 2026-08-22 que o design está de fato errado.**
+  - A AC pede `git diff --name-only HEAD -- next-frontend` vazio. Ele lista os arquivos de SI-02.16a/16b, que ainda não foram commitados — **nenhum deles foi tocado por este SI**, que não escreveu uma linha de código. A intenção da AC (auditoria não edita código) está satisfeita; a checagem literal só passaria com a árvore limpa.
 
 ### SI-02.17a — Tela de solicitação de redefinição de senha (visual shell)
-- **Status:** pending
+- **Status:** completed
+- **Tests:** no tests (shell aferido pelo build; unit em SI-02.17b, E2E por `/plan-test-specs`)
+- **Observations:**
+  - Ação 1 foi um no-op de código, como em SI-02.16a: sete linhas do relatório, seis `skip` e uma `exception`. O `min-w-[280px]` do `Card` entrou no call site.
+  - **As duas inconsistências de copy foram decididas por mim, com autorização do usuário ("pode seguir como que você achar coerente"), e registradas no docblock da página:**
+    - `AuthFooter`: o Figma emparelha "Remember your password?" com um link "Sign up". Quem lembrou a senha quer entrar, não se cadastrar — o link virou "Sign in" apontando para `/login`.
+    - Back arrow (`143:2343`): sem destino no design. `/login` é a única tela que linka para cá, então é para lá que ele volta.
+  - `h1` e a linha de apoio ficaram **dentro** do `ForgotPasswordForm`, não na página — assim SI-02.17b troca o bloco inteiro pela confirmação pós-envio, como `/signup` faz com o painel de sucesso. Diferente de `/login`, onde o `h1` ficou na página porque nada o substitui.
+  - Nenhuma rota `/reset-password` foi criada; o build lista só `/forgot-password` e o handler `/api/auth/forgot-password`. A tela de redefinição segue diferida.
+  - `npx tsc --noEmit`, `npm run build` e `npm run check:tokens` passam. Verificação visual segue indisponível (browsers do Playwright ausentes, mesma pendência de SI-02.16a).
 
 ### SI-02.17b — Tela de solicitação de redefinição de senha (lógica & wiring)
-- **Status:** pending
+- **Status:** completed
+- **Tests:** 6 novos em `components/__tests__/forgot-password-form.test.tsx`; 100 passando no total no frontend (18 arquivos), 191 unit + 45 e2e no backend, sem regressão
+- **Observations:**
+  - **A tela tem um único estado pós-submit, e isso é a feature.** O backend responde `204` exista ou não a conta, então não há nada em que ramificar — a UI não pode revelar o que não lhe foi contado. O `RequestSubmittedPanel` foi redigido nessa restrição: diz o que aconteceria *se* o endereço pertencesse a uma conta, nunca que um e-mail foi enviado. Copy é decisão do implementador (nenhum nó no Figma, e nenhuma TD fechou o texto, diferente de `/signup`).
+  - O teste de indistinguibilidade compara o texto das duas telas com o próprio endereço removido de cada uma, provando que só o eco do e-mail difere. Comparar os textos crus passaria por acidente ou falharia por acidente, dependendo do endereço escolhido.
+  - `429` e o `400` do `ValidationPipe` caem em `root.serverError` sem marcar `aria-invalid` no campo — o erro não pode virar canal lateral sobre a existência da conta. Sai de graça do `error-map.ts`; nenhum código de domínio alcança esta rota (o endpoint só declara `204`/`400`/`429`).
+  - Um teste cobre resposta de erro **sem envelope** (`500` com corpo vazio), caminho que o `?? "Something went wrong."` já tratava mas que nenhuma das outras duas telas exercitava.
+  - `mocks/bff-handlers.ts` ganhou o `204` de `POST /api/auth/forgot-password`. O fake não oferece um segundo desfecho de sucesso porque o contrato não tem um.
+  - Verificação completa desta SI: frontend `npm test` (100), `npx tsc --noEmit`, `npm run build`, `npm run lint` (só o warning pré-existente de `_password`), `npm run check:tokens` e `./scripts/check-api-types-drift.sh`; backend `npm test` (191) e `npm run test:e2e` (45).
+  - **Copy do Figma — resolvido (2026-08-22):** o usuário confirmou que as duas inconsistências (`AuthFooter` de `/forgot-password` rotulando "Sign up" sob "Remember your password?"; placeholder "Enter your email" no campo de senha de `/login`) são erros do design, e não do código. As três telas já divergiam do Figma nesses dois pontos por decisão registrada, então **nenhuma mudança de código foi necessária** — o ajuste que resta é no arquivo Figma, fora do alcance deste repositório.
+  - **Playwright — resolvido (2026-08-22):** o lane E2E voltou a rodar (`npm run test:e2e`, 1 passando — só o smoke existe; os três specs de tela ainda são autoria externa do `/plan-test-specs`). Foram três problemas encadeados, todos corrigidos na infraestrutura em vez de por passo manual:
+    1. **Bibliotecas de sistema ausentes.** A imagem `node:*-slim` não traz as dependências do Chromium; o binário morria com `libglib-2.0.so.0: cannot open shared object file`. A lista de `npx playwright install-deps --dry-run chromium` foi para o `Dockerfile.dev`, no root do build — instalá-la no container em execução exige `apt-get` como root e se perde na recriação seguinte.
+    2. **Índice apt velho.** Com o `apt update` numa camada própria e o `apt install` em outra, o build quebrava com 404 nos `.deb` (o mirror publicou revisão nova; a camada cacheada apontava para versões que saíram do pool). Os dois viraram um `RUN` só.
+    3. **Browsers apagados a cada recriação.** Eles vivem em `~/.cache/ms-playwright`, fora do bind mount. Agora há o volume nomeado `playwright-browsers` no `compose.yaml`. O diretório precisou ser criado no Dockerfile como `node`: um volume nomeado herda dono e permissões do diretório correspondente **na imagem**, e sem isso o Docker o materializava pertencente a root, com `npx playwright install` falhando em `EACCES ... __dirlock`.
+  - **Verificação visual feita (2026-08-22):** as três telas foram renderizadas do build de produção e conferidas contra os nós do Figma. `/login` e `/forgot-password` batem com `138:179` e `140:289` na estrutura e nos tokens; as duas divergências de copy são as intencionais, já confirmadas pelo usuário.
