@@ -1,13 +1,9 @@
 import { z } from "zod"
 
 import type { LoginBffRequest } from "@/lib/api/contracts"
+import type { FormSchema } from "@/lib/forms/form-schema"
 
-/**
- * O `z.ZodType<LoginBffRequest>` é o elo que quebra o build quando o DTO do
- * backend muda — sem ele, o schema seria só um objeto Zod solto
- * (`auth-frontend/TD-06`).
- */
-export const loginSchema: z.ZodType<LoginBffRequest> = z.object({
+export const loginSchema: FormSchema<LoginBffRequest> = z.object({
   email: z.string().min(1, "E-mail é obrigatório").email("E-mail inválido"),
   password: z
     .string()

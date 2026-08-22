@@ -20,14 +20,16 @@ function ProgressLinear({
     <ProgressPrimitive.Root
       data-slot="progress-linear"
       value={value}
-      className={cn("relative h-1 w-full overflow-hidden rounded-full bg-progress-track", className)}
+      className={cn("relative flex h-3 w-full items-center", className)}
       {...props}
     >
-      <ProgressPrimitive.Indicator
-        data-slot="progress-linear-indicator"
-        className="h-full rounded-full bg-primary transition-[width]"
-        style={{ width: `${value}%` }}
-      />
+      <span className="relative h-1 w-full overflow-hidden rounded-full bg-progress-track">
+        <ProgressPrimitive.Indicator
+          data-slot="progress-linear-indicator"
+          className="block h-full rounded-full bg-primary transition-[width]"
+          style={{ width: `${value}%` }}
+        />
+      </span>
     </ProgressPrimitive.Root>
   )
 }

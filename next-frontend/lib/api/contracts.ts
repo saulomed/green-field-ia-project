@@ -128,6 +128,15 @@ type ResendConfirmationUpstreamOperation = paths["/auth/resend-confirmation"]["p
 export type ResendConfirmationBffRequest =
   ResendConfirmationUpstreamOperation["requestBody"]["content"]["application/json"]
 
+/** `204` não tem corpo — só os status de erro carregam envelope. */
+export type ResendConfirmationBffErrorStatus = Exclude<
+  keyof ResendConfirmationUpstreamOperation["responses"],
+  204
+>
+
+export type ResendConfirmationBffErrorResponse =
+  ResendConfirmationUpstreamOperation["responses"][ResendConfirmationBffErrorStatus]["content"]["application/json"]
+
 /* -------------------------------------------------------------------------- */
 /* GET /api/users/me  →  GET /users/me                                         */
 /* -------------------------------------------------------------------------- */

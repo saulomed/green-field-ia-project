@@ -1,22 +1,22 @@
 import { z } from "zod"
 
 import type { RegisterBffRequest } from "@/lib/api/contracts"
-
-/**
- * **Nota de contrato:** o UI Contract de `/signup` (Figma) e a documentação da
- * fase citam um campo `name`, mas o `RegisterDto` real do `nestjs-project`
- * (slice `auth`, já entregue e fora de escopo aqui) só tem `email` e
- * `password`. Seguimos o backend real — `name` não é enviado à API.
- */
+import type { FormSchema } from "@/lib/forms/form-schema"
 
 /**
  * `confirmPassword` é regra só do cliente — não existe campo correspondente
  * no DTO do backend (`auth-frontend/TD-06`, Excludes). A autoridade sobre a
  * regra de senha permanece no backend, que revalida sempre.
  */
-export const signupSchema: z.ZodType<RegisterBffRequest & { confirmPassword: string }> = z
+type SignupFields = RegisterBffRequest & { confirmPassword: string }
+
+export const signupSchema: FormSchema<SignupFields> = z
   .object({
     email: z.string().min(1, "E-mail é obrigatório").email("E-mail inválido"),
+    name: z
+      .string()
+      .min(1, "Nome é obrigatório")
+      .max(255, "O nome deve ter no máximo 255 caracteres"),
     password: z
       .string()
       .min(8, "A senha deve ter no mínimo 8 caracteres")

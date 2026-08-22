@@ -1,7 +1,7 @@
 # phase-02-auth-frontend — Progress
 
 **Status:** in_progress
-**SIs:** 18/27 completed
+**SIs:** 21/27 completed
 
 ### SI-02.0.1 — Infra: instalar os primitives shadcn em lote
 - **Status:** completed
@@ -64,7 +64,7 @@
 - **Status:** completed
 - **Tests:** 24 passing
 - **Observations:**
-  - **Divergência de contrato resolvida com o usuário:** o plano documenta `name` no body de `POST /api/auth/register` e no UI Contract de `/signup`, mas o `RegisterDto` real do backend só tem `email`+`password`. Por decisão do usuário, o schema de signup segue o backend real — `name` não é enviado à API. Se a tela `/signup` (SI-02.15) tiver um campo "Full Name" no Figma, ele será um campo só-de-UI, não vinculado a este schema.
+  - **Divergência de contrato resolvida com o usuário:** o plano documenta `name` no body de `POST /api/auth/register` e no UI Contract de `/signup`, mas o `RegisterDto` real do backend só tem `email`+`password`. Por decisão do usuário, o schema de signup segue o backend real — `name` não é enviado à API. Se a tela `/signup` (SI-02.15) tiver um campo "Full Name" no Figma, ele será um campo só-de-UI, não vinculado a este schema. **↳ Revertido em 2026-08-22, depois da SI-02.15b:** o usuário optou por persistir o nome. O backend ganhou `users.name` e o `RegisterDto` passou a exigir `name`; o campo é validado pelo `signupSchema` e enviado à API. Ver as Observations da SI-02.15b.
   - `lib/api/contracts.ts` ganhou um novo reexport (`ErrorCode`, derivado de `components["schemas"]["ErrorCode"]`) — necessário para `error-map.ts` tipar contra o enum de domínio sem redigitar os códigos.
 
 ### SI-02.7 — Fronteira de guarda de sessão
@@ -124,13 +124,60 @@
   - Esta é a última SI não-visual da fase — a partir daqui todas as SIs restantes (`SI-02.15.0` em diante) são de tela.
 
 ### SI-02.15.0 — Drift audit: Tela de cadastro de conta
-- **Status:** pending
+- **Status:** completed
+- **Tests:** no tests (audit-only; o relatório é o deliverable)
+- **Observations:**
+  - Criado `frontend-drift-report.md` com a seção `## Screen: signup` — 13 componentes auditados: 7 `alinhado`, 1 `drift menor` (`progress-linear.tsx`), 3 `drift relevante` (`text-field.tsx`, `card.tsx`, `checkbox.tsx`), 2 `componente ausente` (`signup-form.tsx`, `signup-success-panel.tsx`). Coluna `Prior` toda `_(none)_` — é a primeira auditoria da fase, não há `prior_decisions` nem CONFLICT possível.
+  - **A skill `figma:figma-implement-design` citada na Technical action 1 não existe** — o plugin do Figma expõe `figma-design-to-code` (a direção read-from-Figma). Executado com essa skill + `get_design_context` no nó `140:333`; o procedimento da auditoria (enum de 4 valores, política de Decision, schema do relatório) está descrito por extenso no próprio SI e em `.claude/skills/plan-build/references/frontend-drift-report-schema.md`, então a ausência da skill não bloqueou nada. Vale corrigir o nome nas SIs `SI-02.16.0` e `SI-02.17.0`.
+  - `card.tsx` e `checkbox.tsx` chegaram como scaffold do `npx shadcn add` (SI-02.0.1) e nunca foram reconciliados — daí o `drift relevante`. Isso confirma a pendência já anotada na SI-02.0.1 sobre o `checkbox.tsx`.
+  - **Drift não emitido como bullet (fora do escopo do primitive):** o `Card` em disco injeta `py-(--card-spacing)` e `gap-(--card-spacing)`, enquanto o nó Figma `143:2400` não declara padding algum — o espaçamento (`px-6 py-10 gap-6`) pertence ao frame `143:2399` que envolve o Card. É composição de tela, resolvida em SI-02.15a pelo consumidor, não retune do primitive.
+  - `--radius-0-5` (2px) não tem utilitário Tailwind (`rounded-0.5` compila para nada, per `.claude/rules/frontend-design-system.md`), por isso o bullet do `Checkbox` pede `rounded-[var(--radius-0-5)]` em vez de um nome de escala.
+  - `.claude/rules/frontend-design-system.md` não tem seção "Variant Name Aliases (Figma → code)" — mapa de aliases vazio, então só as formas 1 (retune exato) e 3 (aditiva) do schema se aplicam; nenhuma forma 2 foi emitida.
+  - AC verificada: `git diff --name-only HEAD -- next-frontend` vazio ao fim do SI (o relatório mora na pasta do plano, fora do subprojeto).
 
 ### SI-02.15a — Tela de cadastro de conta (visual shell)
-- **Status:** pending
+- **Status:** completed
+- **Tests:** no tests (shell smoke-gated pelo build); suíte existente sem regressão — 69 passando
+- **Observations:**
+  - Decisões de drift aplicadas mecanicamente: `text-field.tsx` (slot `trailing` + `min-w-[200px]`), `card.tsx` (radius, borda, min-width, radius dos filhos `img`), `progress-linear.tsx` (wrapper de 12px com a barra de 4px centrada), `checkbox.tsx` (5 retunes). Os dois `create` foram cumpridos pela ação 2.
+  - **`Updated existing DS` fora dos bullets do relatório:** `CardHeader` (`rounded-t-xl`) e `CardFooter` (`rounded-b-xl`) ficaram com o radius shadcn depois do retune do container para `rounded-2`. Não são utilitários com prefixo de variante, então o *post-edit variant-conflict guard* não dispara; mas deixá-los divergentes criaria contradição interna no mesmo arquivo. Retunados para `rounded-t-2` / `rounded-b-2`. O relatório de drift **não** foi reescrito retroativamente, conforme o schema.
+  - `text-field.tsx` deixou de ser um `<input>` nu: o frame (altura, borda, fundo, radius) migrou para um wrapper e o input ficou transparente dentro dele, que é a estrutura do próprio Figma (`Text field` → `State-layer` → `Content` + `Trailing icon`). O anel de foco virou `has-[input:focus-visible]:shadow-focus-ring` no wrapper para não acender quando o toggle de senha recebe foco. `app/login/page.tsx`, único consumidor anterior, não passava `className` e não precisou de ajuste.
+  - `signup-form.tsx` já nasceu com `"use client"` — `ProgressLinear` e `Checkbox` são primitives Radix e não renderizam a partir de um Server Component. Isso antecipa a ação 1 da SI-02.15b, mas era condição para o shell compilar.
+  - `SignupSuccessPanel` não tem nó no Figma (lacuna de design registrada no `context.md`): compus copy e layout a partir da escala tipográfica da própria tela, per `auth-frontend/TD-09`. O botão de reenvio ainda não está ligado.
+  - Fronteira do swap form↔painel: `page.tsx` permanece Server Component com `Card` + seta de voltar + `BrandLogo` + `AuthFooter`; o `SignupForm` é quem troca o corpo pelo painel na SI-02.15b. Mantém a fronteira de cliente o mais profunda possível, per `next-frontend/CLAUDE.md` § Architecture.
+  - A seta de voltar aponta para `/` — nem o Figma nem o UI Contract definem o destino.
+  - **Bloqueio pré-existente, fora do escopo desta SI:** `npm run build` falha com `Invalid environment variables: API_BASE_URL` porque `next-frontend/.env` não existe (o `compose.yaml` marca o `env_file` como `required: false`) e os route handlers importam `lib/api/client.ts`, que valida o env em tempo de import. Quebrado desde a SI-02.10, não por esta SI. Verificado com `-e API_BASE_URL=http://nestjs-api:3000`: build passa, `/signup` pré-renderiza como estático. **↳ Resolvido em 2026-08-22** — ver o bloco "Bloqueio do build" nas Observations da SI-02.15b.
+  - ACs verificadas: `npx tsc --noEmit` limpo, `npm run lint` só com o warning pré-existente em `lib/forms/__tests__/schemas.test.ts`, `npm run check:tokens` OK, e screenshot da `/signup` conferida contra o nó `140:333` — composição, espaçamentos e tipografia batem dentro da tolerância do DS.
 
 ### SI-02.15b — Tela de cadastro de conta (lógica & wiring)
-- **Status:** pending
+- **Status:** completed
+- **Tests:** 13 novos (9 em `signup-form.test.tsx`, 4 em `signup-success-panel.test.tsx`); 82 no total, sem regressão
+- **Observations:**
+  - **Campo `name` passou a ser persistido** (decisão do usuário tomada logo após esta SI, revertendo a da SI-02.6). O `name` entrou no `signupSchema`, é validado (obrigatório, ≤255) e vai no corpo do `POST` — a ação 4 do plano voltou a valer como escrita. A mudança de backend que a viabilizou está descrita no bloco "Persistência do `name`" abaixo.
+  - **`EMAIL_JA_CONFIRMADO` não é alcançável pelo backend real:** `resendConfirmation` no `auth.service.ts` sempre devolve `204` para conta inexistente ou já confirmada, por design de não revelar estado (nota já registrada no próprio route handler da SI-02.12). O `409` é tratado pelo ramo genérico de erro em vez de ganhar copy própria; o teste da linha correspondente do plano cobre esse caminho. Só o `429` tem tratamento distinto — cooldown —, que é o que a AC exige.
+  - `lib/forms/signup-schema.ts` precisou de um ajuste de tipo: a anotação era `z.ZodType<Out>`, que deixa o input `unknown` e faz o `zodResolver` degradar o `useForm` para `FieldValues` (3 erros de `tsc`). Passou a `z.ZodType<SignupFields, SignupFields>`. Comportamento idêntico — os 12 testes de `schemas.test.ts` seguem passando. **`login-schema.ts` e `forgot-password-schema.ts` têm a mesma anotação e vão esbarrar nisso nas SIs 02.16b e 02.17b.**
+  - `vitest.setup.dom.ts` ganhou um stub de `ResizeObserver`: o `jsdom` não o implementa e os primitives Radix medem os nós com ele (`@radix-ui/react-use-size`), então renderizar o `<Checkbox>` lançava na fase de layout effects. É buraco de ambiente da lane, não dependência do teste.
+  - `mocks/bff-handlers.ts` deixou de estar vazio — ganhou o caminho feliz de `/api/auth/register` (`201`) e `/api/auth/resend-confirmation` (`204`), como o próprio docstring do arquivo previa. Desfechos de erro ficam em `server.use(...)` por teste.
+  - Gate do submit implementado com `mode: "onChange"` + `disabled={!termsAccepted || !isValid || isSubmitting}`, per a AC. Efeito colateral: o botão nasce desabilitado, antes de o usuário tocar em qualquer campo.
+  - Heurística de força de senha vive dentro do `signup-form.tsx` (privada ao módulo), não em `lib/` — evita criar um artefato de `lib/` que exigiria arquivo de teste próprio, e ela é coberta pelos testes do componente. As duas copies mais fortes ("Fair"/"Strong") são invenção do implementador: o Figma só desenha o estado fraco.
+  - E2E da tela (`next-frontend/specs/signup.plan.md`) é autorado externamente por `/plan-test-specs`, fora desta SI.
+  - ACs verificadas: 84 testes passando no frontend (191 unit + 45 E2E no backend), `tsc --noEmit` limpo nos dois lados, `lint` só com o warning pré-existente, `check:tokens` OK, `check-api-types-drift.sh` OK e `npm run build` verde sem injeção manual de env.
+
+#### Bloqueio do build — resolvido (2026-08-22)
+
+- `next-frontend/.env` criado a partir do `.env.example`. O arquivo é gitignored, então o passo entrou no `next-frontend/CLAUDE.md` § Development Environment junto com a explicação da falha.
+- O bloco `env_file` do `compose.yaml` foi **removido**, não corrigido. Injetar o `.env` como ambiente do container sombreia a cascata do `@next/env`: o loader do Next nunca sobrescreve variável já presente em `process.env`, então `.env.test` deixava de valer e `lib/__tests__/env.test.ts` passava a ler o valor de desenvolvimento. Nada precisa da injeção — `next build`/`dev`/`start`, `vitest.config.mts` e `playwright.config.ts` chamam `loadEnvConfig` por conta própria. O motivo ficou comentado no próprio `compose.yaml`.
+- `npm run build` agora passa sem nenhuma injeção manual de env.
+
+#### Persistência do `name` — mudança fora do plano da fase (2026-08-22)
+
+Pedida pelo usuário depois da SI-02.15b, com a opção "`users.name` + semear `channel.name`" escolhida entre três alternativas apresentadas.
+
+- **Backend (`nestjs-project`, slice `auth` — fora do escopo desta fase):** `User` ganhou a coluna `name` (varchar 255, NOT NULL); `RegisterDto` ganhou `name` (`@IsString`, `@Length(1, 255)`); `CreateUserInput` e `usersService.create` passam a persistir; `channelService.createForUser` passou a semear `channel.name` a partir de `user.name` em vez do prefixo do e-mail. Efeito colateral desejado: o e-mail de confirmação, que já saudava por `channel.name`, passa a usar o nome real.
+- **Migration `1787426798153-AddUserName`:** a CLI gerou um `ADD ... NOT NULL` seco, que quebra em qualquer banco com contas existentes. Reescrita à mão em três passos (adiciona nullable → backfill de `channels.name`, com fallback no prefixo do e-mail → `SET NOT NULL`), que é caso legítimo de data migration — a CLI não expressa backfill. Rodada com sucesso no banco de dev.
+- **Contrato:** `openapi.json` regenerado e `next-frontend/lib/api/schema.d.ts` propagado por `./scripts/generate-api-types.sh`. O `RegisterBffRequest` derivado quebrou o build do frontend exatamente onde deveria — no `signupSchema`, que declara `RegisterBffRequest & { confirmPassword }`. É a rede de segurança do contrato funcionando.
+- **Testes ajustados:** `auth.service.spec` e `channel.service.spec` (fixtures); os quatro specs que fazem `INSERT INTO users` cru; e os E2E que chamam `POST /auth/register`. Cuidado necessário: `whitelist`/`forbidNonWhitelisted` do `ValidationPipe` rejeita `name` em `POST /auth/login`, então só os registers receberam o campo.
+- **Correção fora de escopo:** `api-error.decorators.spec.ts` afirmava que `ErrorResponseDto` tem exatamente `statusCode`/`error`/`message`. O commit `c062a64` (SI-02.1) adicionou `details` e deixou a asserção defasada — a suíte do backend já estava vermelha antes desta mudança. Assertion atualizada.
 
 ### SI-02.16.0 — Drift audit: Tela de login
 - **Status:** pending

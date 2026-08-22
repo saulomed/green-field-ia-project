@@ -7,12 +7,18 @@ import { forgotPasswordSchema } from "@/lib/forms/forgot-password-schema"
 describe("signupSchema", () => {
   const valid = {
     email: "user@example.com",
+    name: "Ana Silva",
     password: "super-secret-1",
     confirmPassword: "super-secret-1",
   }
 
   it("accepts a valid body", () => {
     expect(signupSchema.safeParse(valid).success).toBe(true)
+  })
+
+  it("rejects an empty name", () => {
+    const result = signupSchema.safeParse({ ...valid, name: "" })
+    expect(result.success).toBe(false)
   })
 
   it("rejects a password shorter than 8 characters", () => {

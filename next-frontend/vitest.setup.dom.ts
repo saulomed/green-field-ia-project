@@ -36,3 +36,17 @@ afterEach(() => {
 })
 
 afterAll(() => server.close())
+
+/**
+ * `jsdom` não implementa `ResizeObserver`, e os primitives do Radix medem os seus nós com ele
+ * (`@radix-ui/react-use-size`) — sem o stub, renderizar um `<Checkbox>` lança na fase de layout
+ * effects. É um buraco do ambiente, não uma dependência de teste: o stub existe só para o
+ * observer não ser `undefined`; nada nesta lane depende das medidas que ele reportaria.
+ */
+class ResizeObserverStub {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver
