@@ -19,8 +19,12 @@ services:
       - 3001:3001
     volumes:
       - ./next-frontend:/home/node/app
-    env_file:
-      - path: ./next-frontend/.env
-        required: false
+    # No `env_file` on purpose. `next-frontend/.env` is loaded by `@next/env` —
+    # by `next build`/`next dev`/`next start`, by `vitest.config.mts`, and by
+    # `playwright.config.ts`, each calling `loadEnvConfig` itself. Injecting the
+    # same file as container environment would *shadow* that cascade: the Next
+    # loader never overwrites a variable already present in `process.env`, so
+    # `.env.test` would stop applying and the Vitest env suite would read the
+    # development value instead of its own.
     depends_on:
       - nestjs-api

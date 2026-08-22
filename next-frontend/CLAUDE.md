@@ -35,6 +35,9 @@ docker compose ps   # all services must show status "running"
 This project runs inside Docker. **All `docker compose` commands run from the repository root**, never from `next-frontend/` or `nestjs-project/` — the root `compose.yaml` `include`s the backend stack so every service lands in one Compose project and shares one network. Running Compose from a subdirectory creates a separate project on a separate network, and `nestjs-api` stops resolving.
 
 ```bash
+# Create the local env file (first time only, on the host — it is gitignored)
+cp next-frontend/.env.example next-frontend/.env
+
 # Start containers (from the repo root)
 docker compose up -d
 
@@ -52,6 +55,10 @@ Services:
 - `mailpit` — SMTP `1025`, web UI `8025`
 
 The frontend is on **3001, not 3000** — the API already owns 3000. The port is pinned in the `dev`/`start` scripts (`next dev -p 3001`), so it holds whether the server runs in the container or on the host. Do not remove the flag.
+
+**Without `.env`, `npm run build` fails** with `Invalid environment variables: API_BASE_URL` — every route handler imports `lib/api/client.ts`, which validates the environment at module evaluation, and the build evaluates them while collecting page data. Copy `.env.example` as shown above.
+
+The Compose service deliberately declares **no `env_file`**: `next-frontend/.env` is loaded by `@next/env`, called by `next build`/`dev`/`start`, by `vitest.config.mts` and by `playwright.config.ts`. Injecting the same file as container environment would shadow that cascade — the Next loader never overwrites a variable already in `process.env`, so `.env.test` would stop applying and the Vitest env suite would read the development value instead of its own.
 
 Verification and teardown run on the **host machine**:
 
