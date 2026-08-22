@@ -70,12 +70,13 @@ describe('api error decorators', () => {
     expect(JSON.stringify(response)).toContain('ErrorResponseDto');
   });
 
-  it('declares ErrorResponseDto once in components.schemas with exactly statusCode, error, message', () => {
+  it('declares ErrorResponseDto once in components.schemas with exactly statusCode, error, message, details', () => {
     const schema = document.components?.schemas?.ErrorResponseDto as {
       properties: Record<string, unknown>;
     };
     expect(schema).toBeDefined();
     expect(Object.keys(schema.properties).sort()).toEqual([
+      'details',
       'error',
       'message',
       'statusCode',
