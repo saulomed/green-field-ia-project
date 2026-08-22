@@ -15,11 +15,47 @@ import { parseUpstreamSetCookie } from "@/lib/api/cookies"
  * que acontece na importação do módulo, antes de qualquer `server.listen()`
  * do MSW rodar em teste. Sem o wrapper, o cliente fica preso ao `fetch` real
  * e nenhum teste consegue interceptá-lo.
+ *
+ * O wrapper também desmonta o `Request` antes de repassá-lo (ver
+ * `sendRequest`), sem o que nenhuma chamada com corpo sobrevive a um `401`
+ * upstream.
  */
 export const api = createClient<paths>({
   baseUrl: config.api.baseUrl,
-  fetch: (...args) => globalThis.fetch(...args),
+  fetch: (request) => sendRequest(request),
 })
+
+/**
+ * Envia um `Request` desmontando-o em `(url, init)` com o corpo materializado.
+ *
+ * O `fetch` instrumentado do Next não consegue reenviar um `Request` cujo
+ * corpo é um stream: internamente ele reconstrói a requisição, e o corpo de um
+ * `Request` chega ao undici como stream sem `source`, o que aborta o reenvio
+ * com `TypeError: fetch failed` / `expected non-null body source`. O `401`
+ * upstream é justamente o que dispara esse reenvio — por isso a falha atinge
+ * apenas os caminhos de erro autenticados, e não os de sucesso.
+ *
+ * `openapi-fetch` sempre monta um `Request` antes de chamar este wrapper
+ * (`coreFetch`), então a desmontagem precisa acontecer aqui.
+ *
+ * O corpo vira **string**, não `ArrayBuffer`: o reenvio transfere o buffer, e
+ * a segunda tentativa o encontra destacado (`Cannot perform
+ * ArrayBuffer.prototype.slice on a detached ArrayBuffer`). Uma string é imutável
+ * e sobrevive a quantos reenvios forem necessários. Ler o corpo como texto é
+ * seguro porque todo o contrato do `nestjs-api` é `application/json`
+ * (`openapi-spec/TD-05`); um corpo binário exigiria outro caminho.
+ */
+async function sendRequest(request: Request): Promise<Response> {
+  const hasBody = request.method !== "GET" && request.method !== "HEAD"
+
+  return globalThis.fetch(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body: hasBody ? await request.text() : undefined,
+    redirect: request.redirect,
+    signal: request.signal,
+  })
+}
 
 /**
  * Única chamada autenticada desta slice (`### Authorization Matrix`). Um
@@ -113,7 +149,7 @@ const refreshOnUnauthorized: Middleware = {
       retryHeaders.set("cookie", withUpdatedCookie(requestCookieHeader, "access_token", newAccessToken))
     }
 
-    const retryResponse = await globalThis.fetch(new Request(request, { headers: retryHeaders }))
+    const retryResponse = await sendRequest(new Request(request, { headers: retryHeaders }))
 
     const mergedHeaders = new Headers(retryResponse.headers)
     for (const setCookie of setCookieHeaders) {
