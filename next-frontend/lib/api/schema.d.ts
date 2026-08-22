@@ -201,13 +201,23 @@ export interface components {
                 name: string;
             };
         };
+        /** @enum {string} */
+        ErrorCode: "EMAIL_JA_EXISTE" | "EMAIL_JA_CONFIRMADO" | "EMAIL_NAO_CONFIRMADO" | "CREDENCIAIS_INVALIDAS" | "SESSAO_INVALIDA" | "TOKEN_INVALIDO" | "TOKEN_REUTILIZADO" | "LIMITE_EXCEDIDO" | "USUARIO_NAO_ENCONTRADO" | "VALIDATION_ERROR" | "INTERNAL_SERVER_ERROR";
+        ErrorDetailDto: {
+            /** @example email */
+            field: string;
+            /** @example email must be a valid email */
+            message: string;
+        };
         ErrorResponseDto: {
             /** @example 400 */
             statusCode: number;
-            /** @example Bad Request */
-            error: string;
+            /** @example EMAIL_JA_EXISTE */
+            error: components["schemas"]["ErrorCode"];
             /** @example email must be a valid email */
             message: string;
+            /** @description Presente apenas quando o erro tem granularidade por campo (violações de validação). */
+            details?: components["schemas"]["ErrorDetailDto"][];
         };
         RegisterDto: {
             /** Format: email */

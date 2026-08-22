@@ -500,6 +500,39 @@
           "channel"
         ]
       },
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "EMAIL_JA_EXISTE",
+          "EMAIL_JA_CONFIRMADO",
+          "EMAIL_NAO_CONFIRMADO",
+          "CREDENCIAIS_INVALIDAS",
+          "SESSAO_INVALIDA",
+          "TOKEN_INVALIDO",
+          "TOKEN_REUTILIZADO",
+          "LIMITE_EXCEDIDO",
+          "USUARIO_NAO_ENCONTRADO",
+          "VALIDATION_ERROR",
+          "INTERNAL_SERVER_ERROR"
+        ]
+      },
+      "ErrorDetailDto": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "example": "email"
+          },
+          "message": {
+            "type": "string",
+            "example": "email must be a valid email"
+          }
+        },
+        "required": [
+          "field",
+          "message"
+        ]
+      },
       "ErrorResponseDto": {
         "type": "object",
         "properties": {
@@ -508,12 +541,23 @@
             "example": 400
           },
           "error": {
-            "type": "string",
-            "example": "Bad Request"
+            "example": "EMAIL_JA_EXISTE",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ErrorCode"
+              }
+            ]
           },
           "message": {
             "type": "string",
             "example": "email must be a valid email"
+          },
+          "details": {
+            "description": "Presente apenas quando o erro tem granularidade por campo (violações de validação).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetailDto"
+            }
           }
         },
         "required": [

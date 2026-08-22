@@ -62,4 +62,40 @@ describe('HttpExceptionFilter', () => {
       message: 'An unexpected error occurred',
     });
   });
+
+  it('should normalize a ValidationPipe exception into a single message plus per-field details', () => {
+    const exception = new HttpException(
+      {
+        validationErrors: [
+          { field: 'email', message: 'email must be a valid email' },
+          { field: 'password', message: 'password must be longer than 8 characters' },
+        ],
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+
+    filter.catch(exception, createMockHost({ status: statusMock, json: jsonMock }));
+
+    expect(statusMock).toHaveBeenCalledWith(400);
+    expect(jsonMock).toHaveBeenCalledWith({
+      statusCode: 400,
+      error: 'VALIDATION_ERROR',
+      message: 'Dados inválidos',
+      details: [
+        { field: 'email', message: 'email must be a valid email' },
+        { field: 'password', message: 'password must be longer than 8 characters' },
+      ],
+    });
+  });
+
+  it('should not attach details for a DomainException', () => {
+    const exception = new HttpException(
+      { error: 'EMAIL_JA_EXISTE', message: 'E-mail já está cadastrado' },
+      HttpStatus.CONFLICT,
+    );
+
+    filter.catch(exception, createMockHost({ status: statusMock, json: jsonMock }));
+
+    expect(jsonMock.mock.calls[0][0]).not.toHaveProperty('details');
+  });
 });

@@ -19,10 +19,13 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transform: true,
       exceptionFactory: (errors) => {
-        const message = errors
-          .flatMap((e) => Object.values(e.constraints ?? {}))
-          .join('; ');
-        return new BadRequestException({ error: 'Bad Request', message });
+        const validationErrors = errors.flatMap((e) =>
+          Object.values(e.constraints ?? {}).map((message) => ({
+            field: e.property,
+            message,
+          })),
+        );
+        return new BadRequestException({ validationErrors });
       },
     }),
   );

@@ -1,4 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ErrorCode } from './error-code.enum';
+import { ErrorDetailDto } from './error-detail.dto';
 
 /**
  * Envelope de erro HTTP emitido pelo `HttpExceptionFilter` global.
@@ -16,9 +18,21 @@ export class ErrorResponseDto {
   @ApiProperty({ example: 400 })
   statusCode: number;
 
-  @ApiProperty({ example: 'Bad Request' })
-  error: string;
+  @ApiProperty({
+    enum: ErrorCode,
+    enumName: 'ErrorCode',
+    example: ErrorCode.EMAIL_JA_EXISTE,
+  })
+  error: ErrorCode;
 
   @ApiProperty({ example: 'email must be a valid email' })
   message: string;
+
+  @ApiProperty({
+    type: () => [ErrorDetailDto],
+    required: false,
+    description:
+      'Presente apenas quando o erro tem granularidade por campo (violações de validação).',
+  })
+  details?: ErrorDetailDto[];
 }
