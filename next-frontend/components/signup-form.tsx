@@ -10,17 +10,16 @@ import {
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { FormField } from "@/components/form-field";
 import { EyeIcon, EyeOffIcon } from "@/components/icons";
 import { SignupSuccessPanel } from "@/components/signup-success-panel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FormLabel } from "@/components/ui/form-label";
 import { IconButton } from "@/components/ui/icon-button";
 import { ProgressLinear } from "@/components/ui/progress-linear";
 import { TextField } from "@/components/ui/text-field";
 import type { RegisterBffErrorResponse, RegisterBffRequest, RegisterBffResponse } from "@/lib/api/contracts";
 import { ROOT_SERVER_ERROR, resolveErrorField } from "@/lib/forms/error-map";
-import { cn } from "@/lib/utils";
 import { signupSchema, type SignupSchema } from "@/lib/forms/signup-schema";
 
 const STRENGTH_IDS = "password-strength password-strength-hint";
@@ -71,39 +70,6 @@ function PasswordStrength({ control }: { control: Control<SignupSchema> }) {
   );
 }
 
-type FieldProps = {
-  id: string;
-  label: string;
-  error?: FieldError;
-  /** Ids of always-present descriptions (strength bar, hint) appended after the error id. */
-  describedBy?: string;
-  children: (a11y: { "aria-invalid"?: true; "aria-describedby"?: string }) => ReactNode;
-};
-
-/**
- * Label + control + error message, with the `aria-invalid`/`aria-describedby`
- * wiring derived from the field id rather than spelled out per field — the
- * four fields of this form would otherwise repeat it, and drift.
- */
-function Field({ id, label, error, describedBy, children }: FieldProps) {
-  const errorId = `${id}-error`;
-
-  return (
-    <div className="flex w-full flex-col gap-2">
-      <FormLabel htmlFor={id}>{label}</FormLabel>
-      {children({
-        "aria-invalid": error ? true : undefined,
-        "aria-describedby": cn(error && errorId, describedBy) || undefined,
-      })}
-      {error ? (
-        <p id={errorId} className="text-caption text-destructive">
-          {error.message}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 type PasswordFieldProps = {
   id: string;
   label: string;
@@ -116,7 +82,7 @@ type PasswordFieldProps = {
   children?: ReactNode;
 };
 
-/** A `Field` whose control is a masked input with its own visibility toggle. */
+/** A `FormField` whose control is a masked input with its own visibility toggle. */
 function PasswordField({
   id,
   label,
@@ -130,7 +96,7 @@ function PasswordField({
   const [visible, setVisible] = useState(false);
 
   return (
-    <Field id={id} label={label} error={error} describedBy={describedBy}>
+    <FormField id={id} label={label} error={error} describedBy={describedBy}>
       {(a11y) => (
         <>
           <TextField
@@ -153,7 +119,7 @@ function PasswordField({
           {children}
         </>
       )}
-    </Field>
+    </FormField>
   );
 }
 
@@ -226,7 +192,7 @@ export function SignupForm() {
         </p>
       ) : null}
 
-      <Field id="name" label="Full Name" error={errors.name}>
+      <FormField id="name" label="Full Name" error={errors.name}>
         {(a11y) => (
           <TextField
             id="name"
@@ -237,9 +203,9 @@ export function SignupForm() {
             {...register("name")}
           />
         )}
-      </Field>
+      </FormField>
 
-      <Field id="email" label="Email address" error={errors.email}>
+      <FormField id="email" label="Email address" error={errors.email}>
         {(a11y) => (
           <TextField
             id="email"
@@ -250,7 +216,7 @@ export function SignupForm() {
             {...register("email")}
           />
         )}
-      </Field>
+      </FormField>
 
       <PasswordField
         id="password"
