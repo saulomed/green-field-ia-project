@@ -17,7 +17,7 @@
  * `paths[<rota>][<método>]["responses"][<status>]["content"]["application/json"]`.
  */
 
-import type { paths } from "@/lib/api/schema"
+import type { components, paths } from "@/lib/api/schema"
 
 /**
  * Reexportação do mapa de rotas gerado (next-frontend-msw-base/TD-03).
@@ -30,6 +30,13 @@ import type { paths } from "@/lib/api/schema"
  * por `Pick`/`Omit`/`Extract`/`Exclude`, nunca reexpondo tipos gerados crus.
  */
 export type { paths }
+
+/**
+ * Código de domínio do envelope de erro (`http-error-contract/TD-03`) — enum
+ * nomeado na spec, gerado aqui como union de string literals pelo
+ * `openapi-typescript`. Reexportado pelo mesmo motivo de `paths` acima.
+ */
+export type ErrorCode = components["schemas"]["ErrorCode"]
 
 /* -------------------------------------------------------------------------- */
 /* POST /api/auth/login  →  POST /auth/login                                    */
@@ -69,3 +76,63 @@ export type LoginBffErrorStatus = Exclude<keyof LoginUpstreamOperation["response
 /** Corpo de erro da rota, no formato padronizado do backend. */
 export type LoginBffErrorResponse =
   LoginUpstreamOperation["responses"][LoginBffErrorStatus]["content"]["application/json"]
+
+/* -------------------------------------------------------------------------- */
+/* POST /api/auth/register  →  POST /auth/register                             */
+/* -------------------------------------------------------------------------- */
+
+type RegisterUpstreamOperation = paths["/auth/register"]["post"]
+
+type RegisterUpstreamRequest =
+  RegisterUpstreamOperation["requestBody"]["content"]["application/json"]
+
+type RegisterUpstreamResponse =
+  RegisterUpstreamOperation["responses"][201]["content"]["application/json"]
+
+/** O `201` não emite cookie de sessão — não há campo sensível a omitir. */
+export type RegisterBffResponse = Pick<RegisterUpstreamResponse, "id" | "email" | "channel">
+
+/** Corpo que o componente envia ao BFF — idêntico ao que o BFF envia ao `nestjs-api`. */
+export type RegisterBffRequest = RegisterUpstreamRequest
+
+export type RegisterBffErrorStatus = Exclude<keyof RegisterUpstreamOperation["responses"], 201>
+
+export type RegisterBffErrorResponse =
+  RegisterUpstreamOperation["responses"][RegisterBffErrorStatus]["content"]["application/json"]
+
+/* -------------------------------------------------------------------------- */
+/* POST /api/auth/forgot-password  →  POST /auth/forgot-password               */
+/* -------------------------------------------------------------------------- */
+
+type ForgotPasswordUpstreamOperation = paths["/auth/forgot-password"]["post"]
+
+/** Corpo que o componente envia ao BFF — idêntico ao que o BFF envia ao `nestjs-api`. */
+export type ForgotPasswordBffRequest =
+  ForgotPasswordUpstreamOperation["requestBody"]["content"]["application/json"]
+
+/** `204` não tem corpo — só os status de erro carregam envelope. */
+export type ForgotPasswordBffErrorStatus = Exclude<
+  keyof ForgotPasswordUpstreamOperation["responses"],
+  204
+>
+
+export type ForgotPasswordBffErrorResponse =
+  ForgotPasswordUpstreamOperation["responses"][ForgotPasswordBffErrorStatus]["content"]["application/json"]
+
+/* -------------------------------------------------------------------------- */
+/* POST /api/auth/resend-confirmation  →  POST /auth/resend-confirmation       */
+/* -------------------------------------------------------------------------- */
+
+type ResendConfirmationUpstreamOperation = paths["/auth/resend-confirmation"]["post"]
+
+export type ResendConfirmationBffRequest =
+  ResendConfirmationUpstreamOperation["requestBody"]["content"]["application/json"]
+
+/* -------------------------------------------------------------------------- */
+/* GET /api/users/me  →  GET /users/me                                         */
+/* -------------------------------------------------------------------------- */
+
+type UsersMeUpstreamOperation = paths["/users/me"]["get"]
+
+export type UsersMeBffResponse =
+  UsersMeUpstreamOperation["responses"][200]["content"]["application/json"]

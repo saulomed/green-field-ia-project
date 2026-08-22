@@ -42,4 +42,13 @@ export const handlers = [
       channel: { nickname: "user" },
     }),
   ),
+
+  /** Caminho feliz do cadastro — `201` sem cookie de sessão (`auth/TD-09`). */
+  http.post("/auth/register", ({ response }) =>
+    response(201).json({
+      id: "00000000-0000-4000-8000-000000000002",
+      email: "new-user@streamtube.test",
+      channel: { nickname: "newuser" },
+    }),
+  ),
 ]
